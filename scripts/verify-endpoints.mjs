@@ -73,7 +73,14 @@ const CHECKS = [
     fields: ['targetConsensus', 'targetHigh', 'targetLow'],
   },
   {
+    // search-symbol matches ticker text, so it must be probed with a ticker.
     endpoint: 'search-symbol',
+    params: { query: 'AAPL', limit: 3 },
+    fields: ['symbol', 'name'],
+  },
+  {
+    // search-name matches company names — the other half of the search box.
+    endpoint: 'search-name',
     params: { query: 'apple', limit: 3 },
     fields: ['symbol', 'name'],
   },

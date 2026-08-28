@@ -46,8 +46,28 @@ export const getPriceTargetConsensus = (symbol: string) =>
     (r) => r[0] ?? null,
   );
 
-export const searchSymbols = (query: string, limit = 12) =>
-  fmpList<SearchResult>('search-symbol', { query, limit }, TTL.search);
+/**
+ * Symbol lookup. FMP splits this across two endpoints: `search-symbol` matches
+ * ticker text and `search-name` matches company names, so "AAPL" and "apple"
+ * each only hit one of them. Both are queried and the results merged.
+ */
+export async function searchSymbols(query: string, limit = 12): Promise<SearchResult[]> {
+  const [bySymbol, byName] = await Promise.all([
+    fmpList<SearchResult>('search-symbol', { query, limit }, TTL.search).catch(() => []),
+    fmpList<SearchResult>('search-name', { query, limit }, TTL.search).catch(() => []),
+  ]);
+
+  // Ticker matches rank first — typing a ticker should not be buried under
+  // companies that merely mention it in their name.
+  const seen = new Set<string>();
+  const merged: SearchResult[] = [];
+  for (const row of [...bySymbol, ...byName]) {
+    if (!row?.symbol || seen.has(row.symbol)) continue;
+    seen.add(row.symbol);
+    merged.push(row);
+  }
+  return merged.slice(0, limit);
+}
 
 /** 10-year Treasury, used as the default risk-free rate in the CAPM cost of equity. */
 export async function getRiskFreeRate(): Promise<number> {
