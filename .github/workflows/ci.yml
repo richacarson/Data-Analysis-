@@ -6,10 +6,15 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  # Next's anonymous telemetry ping can stall a build on a sandboxed runner.
+  NEXT_TELEMETRY_DISABLED: '1'
+
 jobs:
   build:
     name: Typecheck, test and build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,6 +29,7 @@ jobs:
   verify-endpoints:
     name: Verify FMP endpoints against the live API
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     # Forked pull requests cannot read repository secrets, so skip rather than
     # fail with a misleading "key not set".
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
