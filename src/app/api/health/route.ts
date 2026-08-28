@@ -51,7 +51,7 @@ export async function GET() {
   const failing = results.filter((r) => !r.ok);
   return NextResponse.json(
     {
-      keyConfigured: Boolean(process.env.FMP_API_KEY),
+      keyConfigured: Boolean(process.env.FMP_KEY || process.env.FMP_API_KEY),
       healthy: failing.length === 0,
       passed: results.length - failing.length,
       total: results.length,

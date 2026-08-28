@@ -50,26 +50,38 @@ npm run dev
 
 | Variable | Where it comes from |
 | --- | --- |
-| `FMP_API_KEY` | Your Financial Modeling Prep account. **Server-side only** — it is never sent to the browser. |
+| `FMP_KEY` | Your Financial Modeling Prep account. **Server-side only** — it is never sent to the browser. Stored as a repository secret for CI; `FMP_API_KEY` is accepted as an alias locally. |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project settings → API |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase publishable key (safe to expose; every table is behind row level security) |
 
 Supabase is optional. Without it the app runs as a pure valuation tool and the
 watchlist falls back to browser storage.
 
-### Verifying your API key
+### Verifying the data layer
 
-Visit **`/api/health`**. It pings every FMP endpoint the app depends on and
-reports which ones answered, how fast, and how many rows came back:
+FMP's documentation page slugs do not always match its REST paths, and endpoints
+move between plan tiers, so the app does not assume its endpoint list is correct
+— it proves it, two ways.
+
+**In CI**, on every push:
+
+```bash
+npm run verify:endpoints     # FMP_KEY=... node scripts/verify-endpoints.mjs
+```
+
+This calls all twelve endpoints and asserts each returns real rows *and* still
+contains the specific fields the valuation engine reads, so a renamed path or a
+schema change fails the build loudly instead of silently rendering zeros. The
+key is redacted from all output.
+
+**At runtime**, visit **`/api/health`**:
 
 ```json
 { "keyConfigured": true, "healthy": true, "passed": 12, "total": 12, "results": [...] }
 ```
 
-FMP moves endpoints between plan tiers and API generations, so this is the
-fastest way to confirm the key is wired up and to spot a renamed route. Any
-endpoint that fails degrades only its own panel — a banner on the stock page
-names what didn't load rather than silently rendering zeros.
+If an endpoint does fail, it degrades only its own panel — a banner on the stock
+page names exactly what didn't load.
 
 ## Database
 

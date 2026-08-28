@@ -24,10 +24,12 @@ export class FmpError extends Error {
 }
 
 function apiKey(): string {
-  const key = process.env.FMP_API_KEY;
+  // FMP_KEY is the name used for the repository/deployment secret; FMP_API_KEY
+  // is accepted as an alias so a local .env.local using either name works.
+  const key = process.env.FMP_KEY || process.env.FMP_API_KEY;
   if (!key) {
     throw new FmpError(
-      'FMP_API_KEY is not set. Copy .env.example to .env.local and add your key.',
+      'FMP_KEY is not set. Copy .env.example to .env.local and add your key.',
       500,
       '(config)',
     );
