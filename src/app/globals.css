@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-bg text-ink antialiased;
+  font-feature-settings: 'tnum' 1, 'cv05' 1;
+}
+
+/* Numeric columns must align across rows to be scannable. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@layer components {
+  .panel {
+    @apply rounded-lg border border-line bg-panel;
+  }
+  .panel-head {
+    @apply flex items-baseline justify-between gap-3 border-b border-line px-4 py-3;
+  }
+  .panel-title {
+    @apply text-[13px] font-semibold tracking-wide text-ink;
+  }
+  .panel-sub {
+    @apply text-[11px] text-muted;
+  }
+  .stat-label {
+    @apply text-[11px] uppercase tracking-wider text-muted;
+  }
+  .stat-value {
+    @apply tabular text-[19px] font-semibold text-ink;
+  }
+  .row {
+    @apply flex items-center justify-between gap-4 border-b border-line/60 px-4 py-2 text-[13px] last:border-0;
+  }
+  .row-label {
+    @apply text-muted;
+  }
+  .row-value {
+    @apply tabular font-medium text-ink;
+  }
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #0b0d12; }
+::-webkit-scrollbar-thumb { background: #252b37; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: #333b4a; }

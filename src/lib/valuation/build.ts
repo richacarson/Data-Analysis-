@@ -1,0 +1,345 @@
+import {
+  getBalanceSheets,
+  getCashFlowStatements,
+  getEnterpriseValues,
+  getEstimates,
+  getFinancialScores,
+  getIncomeStatements,
+  getKeyMetricsTTM,
+  getPriceTargetConsensus,
+  getProfile,
+  getRatiosTTM,
+  getRiskFreeRate,
+} from '../fmp/endpoints';
+import { discountedCashFlow, sensitivityGrid, type DcfAssumptions } from './dcf';
+import { earningsDcf, fcfConversionRatio } from './earnings-dcf';
+import {
+  cagr,
+  earningsPowerValue,
+  economicSpread,
+  forwardPeg,
+  grahamNumber,
+  ownerEarnings,
+  peg,
+  shareholderYields,
+  valueOnMultiple,
+  type MultipleValuation,
+} from './multiples';
+import { reverseDcf } from './reverse-dcf';
+import { clamp, impliedCostOfDebt, wacc } from './wacc';
+
+/** Long-run US equity risk premium. Overridable per valuation. */
+export const DEFAULT_ERP = 0.05;
+
+export interface ValuationOverrides {
+  discountRate?: number;
+  terminalGrowth?: number;
+  forecastYears?: number;
+  equityRiskPremium?: number;
+  exitMultiple?: number;
+  fcfConversion?: number;
+}
+
+export type ValuationReport = Awaited<ReturnType<typeof buildValuation>>;
+
+/**
+ * Assembles every valuation view for a symbol from FMP fundamentals.
+ *
+ * Each model is reported alongside the assumptions that drove it — a fair value
+ * without its inputs is not a usable number.
+ */
+export async function buildValuation(symbol: string, overrides: ValuationOverrides = {}) {
+  const ticker = symbol.toUpperCase().trim();
+
+  // Each feed is fetched independently so one unavailable endpoint degrades a
+  // single panel instead of taking down the whole valuation. Whatever failed is
+  // reported back in `dataIssues` rather than silently rendering as a zero.
+  const dataIssues: string[] = [];
+
+  async function optional<T>(label: string, promise: Promise<T>, fallback: T): Promise<T> {
+    try {
+      return await promise;
+    } catch (error) {
+      dataIssues.push(`${label}: ${error instanceof Error ? error.message : String(error)}`);
+      return fallback;
+    }
+  }
+
+  const [
+    profile,
+    income,
+    cashflow,
+    balance,
+    enterprise,
+    estimates,
+    metrics,
+    ratios,
+    scores,
+    priceTarget,
+    riskFreeRate,
+  ] = await Promise.all([
+    // The profile carries the price and share count, so it is the one hard requirement.
+    getProfile(ticker),
+    optional('income statement', getIncomeStatements(ticker, 'annual', 12), []),
+    optional('cash flow statement', getCashFlowStatements(ticker, 'annual', 12), []),
+    optional('balance sheet', getBalanceSheets(ticker, 'annual', 12), []),
+    optional('enterprise values', getEnterpriseValues(ticker, 12), []),
+    optional('analyst estimates', getEstimates(ticker, 'annual', 10), []),
+    optional('key metrics', getKeyMetricsTTM(ticker), null),
+    optional('ratios', getRatiosTTM(ticker), null),
+    optional('financial scores', getFinancialScores(ticker), null),
+    optional('price target consensus', getPriceTargetConsensus(ticker), null),
+    getRiskFreeRate(),
+  ]);
+
+  if (!profile) throw new Error(`No profile found for ${ticker}`);
+
+  const latestIncome = income[0];
+  const latestCash = cashflow[0];
+  const latestBalance = balance[0];
+  const latestEv = enterprise[0];
+
+  const price = profile.price;
+  const shares = latestIncome?.weightedAverageShsOutDil || latestEv?.numberOfShares || 0;
+  const netDebt = latestBalance?.netDebt ?? (latestEv ? latestEv.addTotalDebt - latestEv.minusCashAndCashEquivalents : 0);
+  const totalDebt = latestBalance?.totalDebt ?? latestEv?.addTotalDebt ?? 0;
+  const marketCap = profile.marketCap || latestEv?.marketCapitalization || 0;
+
+  const taxRate = clamp(
+    ratios?.effectiveTaxRateTTM ??
+      (latestIncome && latestIncome.incomeBeforeTax > 0
+        ? latestIncome.incomeTaxExpense / latestIncome.incomeBeforeTax
+        : 0.21),
+    0,
+    0.5,
+  );
+
+  // ---- Cost of capital -----------------------------------------------------
+  const equityRiskPremium = overrides.equityRiskPremium ?? DEFAULT_ERP;
+  const costOfDebt = impliedCostOfDebt(latestIncome?.interestExpense ?? 0, totalDebt, riskFreeRate);
+  const capital = wacc({
+    riskFreeRate,
+    equityRiskPremium,
+    beta: profile.beta || 1,
+    marketCap,
+    totalDebt,
+    costOfDebt,
+    taxRate,
+  });
+
+  const discountRate = overrides.discountRate ?? capital.wacc;
+  const terminalGrowth = overrides.terminalGrowth ?? 0.025;
+  const forecastYears = overrides.forecastYears ?? 10;
+
+  // ---- Historical growth, used to seed the FCF forecast --------------------
+  const fcfHistory = cashflow.map((c) => ({
+    date: c.date,
+    freeCashFlow: c.freeCashFlow,
+    netIncome: c.netIncome,
+    operatingCashFlow: c.operatingCashFlow,
+    capex: c.capitalExpenditure,
+  }));
+
+  const oldestFcf = fcfHistory[Math.min(fcfHistory.length - 1, 4)];
+  const latestFcf = fcfHistory[0];
+  const historicalFcfCagr =
+    oldestFcf && latestFcf
+      ? cagr(oldestFcf.freeCashFlow, latestFcf.freeCashFlow, Math.min(fcfHistory.length - 1, 4))
+      : null;
+
+  const revenueCagr5y =
+    income.length > 5 ? cagr(income[5].revenue, income[0].revenue, 5) : null;
+  const epsCagr5y =
+    income.length > 5 ? cagr(income[5].epsDiluted, income[0].epsDiluted, 5) : null;
+
+  // Analyst-implied forward growth takes precedence over extrapolated history.
+  const sortedEstimates = [...estimates].sort((a, b) => a.date.localeCompare(b.date));
+  const firstEstimate = sortedEstimates[0];
+  const lastEstimate = sortedEstimates[sortedEstimates.length - 1];
+  const forwardEpsCagr =
+    firstEstimate && lastEstimate && sortedEstimates.length > 1
+      ? cagr(firstEstimate.epsAvg, lastEstimate.epsAvg, sortedEstimates.length - 1)
+      : null;
+
+  const seedGrowth = clamp(forwardEpsCagr ?? historicalFcfCagr ?? 0.05, -0.1, 0.35);
+
+  // ---- Model 1: FCF discounted cash flow ----------------------------------
+  const baseFcf = latestFcf?.freeCashFlow ?? 0;
+  const dcfAssumptions: DcfAssumptions = {
+    years: forecastYears,
+    discountRate,
+    initialGrowth: seedGrowth,
+    terminalGrowth,
+    terminalMethod: 'perpetuity',
+    midYear: true,
+  };
+  const bridge = { netDebt, sharesOutstanding: shares };
+  const fcfDcf = discountedCashFlow(baseFcf, dcfAssumptions, bridge);
+
+  // ---- Model 2: earnings-projection DCF -----------------------------------
+  const conversion = overrides.fcfConversion ?? fcfConversionRatio(fcfHistory);
+  const epsDcf = earningsDcf(
+    estimates.map((e) => ({
+      date: e.date,
+      epsAvg: e.epsAvg,
+      epsLow: e.epsLow,
+      epsHigh: e.epsHigh,
+      netIncomeAvg: e.netIncomeAvg,
+      revenueAvg: e.revenueAvg,
+      numAnalystsEps: e.numAnalystsEps,
+    })),
+    {
+      discountRate: capital.costOfEquity,
+      fcfConversion: conversion,
+      fadeYears: 5,
+      postEstimateGrowth: clamp(seedGrowth * 0.6, 0.01, 0.12),
+      terminalGrowth,
+    },
+    latestIncome?.epsDiluted ?? 0,
+  );
+
+  // ---- Model 3: reverse DCF ------------------------------------------------
+  const reverse = reverseDcf(baseFcf, dcfAssumptions, bridge, price);
+
+  // ---- Model 4: earnings power value (no-growth floor) --------------------
+  const epv = earningsPowerValue({
+    ebit: latestIncome?.ebit ?? 0,
+    taxRate,
+    investedCapital: metrics?.investedCapitalTTM ?? 0,
+    wacc: discountRate,
+  });
+  const epvPerShare = shares > 0 ? (epv - netDebt) / shares : 0;
+
+  // ---- Model 5: relative multiples ----------------------------------------
+  const eps = ratios?.netIncomePerShareTTM ?? latestIncome?.epsDiluted ?? 0;
+  const fcfPerShare = ratios?.freeCashFlowPerShareTTM ?? (shares > 0 ? baseFcf / shares : 0);
+  const bookPerShare = ratios?.bookValuePerShareTTM ?? 0;
+  const forwardEps = firstEstimate?.epsAvg ?? 0;
+
+  const multiples: MultipleValuation[] = [];
+  if (eps > 0) multiples.push(valueOnMultiple('Historical P/E', ratios?.priceToEarningsRatioTTM ?? 0, eps, price));
+  if (forwardEps > 0) multiples.push(valueOnMultiple('Forward P/E (consensus)', price / forwardEps, forwardEps, price));
+  if (fcfPerShare > 0) multiples.push(valueOnMultiple('P/FCF', ratios?.priceToFreeCashFlowRatioTTM ?? 0, fcfPerShare, price));
+  if (bookPerShare > 0) multiples.push(valueOnMultiple('P/B', ratios?.priceToBookRatioTTM ?? 0, bookPerShare, price));
+
+  // ---- Growth-adjusted valuation ------------------------------------------
+  const trailingPeg = peg(ratios?.priceToEarningsRatioTTM ?? 0, (epsCagr5y ?? 0) * 100);
+  const fwdPeg = forwardPeg(price, forwardEps, (forwardEpsCagr ?? 0) * 100);
+
+  // ---- Quality -------------------------------------------------------------
+  const roic = metrics?.returnOnInvestedCapitalTTM ?? 0;
+  const spread = economicSpread(roic, discountRate);
+
+  const oe = latestCash && latestIncome
+    ? ownerEarnings({
+        netIncome: latestCash.netIncome,
+        depreciationAndAmortization: latestCash.depreciationAndAmortization,
+        capitalExpenditure: latestCash.capitalExpenditure,
+        changeInWorkingCapital: latestCash.changeInWorkingCapital,
+        stockBasedCompensation: latestCash.stockBasedCompensation,
+      })
+    : 0;
+
+  const yields = shareholderYields({
+    netIncome: latestIncome?.netIncome ?? 0,
+    freeCashFlow: baseFcf,
+    dividendsPaid: latestCash?.commonDividendsPaid ?? 0,
+    buybacks: latestCash?.commonStockRepurchased ?? 0,
+    marketCap,
+  });
+
+  // ---- Consensus of models -------------------------------------------------
+  const candidates = [
+    { label: 'FCF DCF', value: fcfDcf.fairValuePerShare },
+    { label: 'Earnings DCF', value: epsDcf.fairValuePerShare },
+    { label: 'Earnings power', value: epvPerShare },
+    { label: 'Graham number', value: grahamNumber(eps, bookPerShare) ?? 0 },
+  ].filter((c) => Number.isFinite(c.value) && c.value > 0);
+
+  const blendedFairValue = candidates.length
+    ? candidates.reduce((s, c) => s + c.value, 0) / candidates.length
+    : 0;
+
+  const grid = sensitivityGrid(
+    baseFcf,
+    dcfAssumptions,
+    bridge,
+    price,
+    [discountRate - 0.02, discountRate - 0.01, discountRate, discountRate + 0.01, discountRate + 0.02],
+    [terminalGrowth - 0.01, terminalGrowth - 0.005, terminalGrowth, terminalGrowth + 0.005, terminalGrowth + 0.01],
+  );
+
+  return {
+    symbol: ticker,
+    asOf: new Date().toISOString(),
+    dataIssues,
+    profile,
+    price,
+    marketCap,
+    shares,
+    netDebt,
+
+    costOfCapital: {
+      ...capital,
+      riskFreeRate,
+      equityRiskPremium,
+      costOfDebtPreTax: costOfDebt,
+      taxRate,
+      discountRateUsed: discountRate,
+    },
+
+    growth: {
+      revenueCagr5y,
+      epsCagr5y,
+      historicalFcfCagr,
+      forwardEpsCagr,
+      seedGrowth,
+    },
+
+    models: {
+      fcfDcf: { ...fcfDcf, assumptions: dcfAssumptions, baseCashFlow: baseFcf },
+      earningsDcf: { ...epsDcf, fcfConversion: conversion, discountRate: capital.costOfEquity },
+      reverseDcf: reverse,
+      earningsPower: { total: epv, perShare: epvPerShare },
+      grahamNumber: grahamNumber(eps, bookPerShare),
+      multiples,
+    },
+
+    blendedFairValue,
+    upside: price > 0 ? blendedFairValue / price - 1 : 0,
+    modelSpread: candidates,
+    sensitivity: grid,
+
+    growthAdjusted: {
+      pegTrailing: trailingPeg,
+      pegForward: fwdPeg,
+      pegFromApi: ratios?.priceToEarningsGrowthRatioTTM ?? null,
+      forwardPegFromApi: ratios?.forwardPriceToEarningsGrowthRatioTTM ?? null,
+    },
+
+    quality: {
+      roic,
+      wacc: discountRate,
+      economicSpread: spread,
+      ownerEarnings: oe,
+      ownerEarningsYield: marketCap > 0 ? oe / marketCap : 0,
+      altmanZScore: scores?.altmanZScore ?? null,
+      piotroskiScore: scores?.piotroskiScore ?? null,
+      yields,
+    },
+
+    consensus: {
+      priceTarget,
+      estimates: sortedEstimates,
+    },
+
+    history: {
+      income: income.slice(0, 10),
+      cashflow: cashflow.slice(0, 10),
+      balance: balance.slice(0, 10),
+    },
+
+    ratios,
+    metrics,
+  };
+}
