@@ -1,5 +1,7 @@
 # Equity Lens
 
+**Live:** <https://data-analysis-beta-three.vercel.app> (sign-in required)
+
 Deep fundamental stock analysis in the browser — discounted cash flow driven by
 analyst earnings projections, reverse DCF, growth-adjusted multiples, quality
 scoring, and sensitivity analysis. Built on the Financial Modeling Prep premium API.
@@ -54,8 +56,9 @@ npm run dev
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project settings → API |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase publishable key (safe to expose; every table is behind row level security) |
 
-Supabase is optional. Without it the app runs as a pure valuation tool and the
-watchlist falls back to browser storage.
+Supabase is required for a deployed instance: the whole app sits behind
+sign-in, because every valuation page spends paid FMP API calls. Locally the
+gate is disabled so you can develop without it. See DEPLOY.md.
 
 ### Verifying the data layer
 

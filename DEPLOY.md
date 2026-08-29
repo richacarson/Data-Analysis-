@@ -1,56 +1,75 @@
 # Deploying Equity Lens
 
-The app is a standard Next.js server application: it needs a Node runtime, not a
-static host, because the FMP key is read server-side and must never reach the
-browser. Vercel is the path of least resistance — it detects the framework, and
-no config file is required.
+**Live:** <https://data-analysis-beta-three.vercel.app>
 
-## Vercel (recommended, ~2 minutes)
+The app is a Next.js server application: it needs a Node runtime, not a static
+host, because the FMP key is read server-side and must never reach the browser.
 
-1. Go to <https://vercel.com/new> and import `richacarson/Data-Analysis-`.
-2. Framework preset will auto-detect as **Next.js**. Leave build settings alone.
-3. Add three environment variables (Settings → Environment Variables), each
-   applied to **Production, Preview and Development**:
+## Current deployment
 
-   | Name | Value |
-   | --- | --- |
-   | `FMP_KEY` | your Financial Modeling Prep key |
-   | `NEXT_PUBLIC_SUPABASE_URL` | `https://ocovjbvrtbxptqtucyqw.supabase.co` |
-   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | the project's publishable key |
+Hosted on Vercel, project `data-analysis`, git-linked to this repository so every
+push to the production branch deploys automatically.
 
-   `NEXT_PUBLIC_*` values are inlined at build time, so if you add them after the
-   first deploy you must redeploy for them to take effect.
+| Setting | Value |
+| --- | --- |
+| Production branch | `claude/stock-analysis-web-app-u12rr8` |
+| Production domain | `data-analysis-beta-three.vercel.app` |
+| Node version | 24.x |
 
-4. **Set the production branch.** This repository has no `main` yet — the code
-   lives on `claude/stock-analysis-web-app-u12rr8`. Either merge that branch to
-   `main` first, or set Settings → Git → Production Branch to it.
-5. Deploy, then open `/api/health` on the live URL. It should report
-   `"healthy": true, "passed": 13, "total": 13`. If it doesn't, the response
-   names the endpoint that failed.
+### Environment variables
 
-### Supabase auth redirect
+| Name | Type | Why |
+| --- | --- | --- |
+| `FMP_KEY` | Sensitive | A real secret, read only in server code at request time. |
+| `NEXT_PUBLIC_SUPABASE_URL` | Encrypted (not Sensitive) | Must be readable at build time. |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Encrypted (not Sensitive) | Same. Public by design and protected by row level security. |
 
-Magic-link sign-in sends users back to the origin they signed in from. Add the
-deployed URL to Supabase → Authentication → URL Configuration → Redirect URLs,
-otherwise the emailed link will bounce to localhost.
+**Do not mark the `NEXT_PUBLIC_*` variables as Sensitive.** Vercel withholds
+sensitive values at build time, and `NEXT_PUBLIC_*` values must be inlined into
+the bundle during the build. Marking them sensitive makes the app return
+`503 Authentication is not configured` on every route, because the middleware
+cannot see them. This bit us once — the symptom looks like missing variables even
+though they are present in the dashboard.
 
-Note that this Supabase project gates signup with an `allowed_users` allowlist,
-so only allowlisted emails can create an account.
+## Remaining manual steps
+
+These two cannot be done through the API and need the dashboard:
+
+1. **Supabase redirect URL — required for sign-in to work.**
+   Supabase → Authentication → URL Configuration → add
+   `https://data-analysis-beta-three.vercel.app/**` to Redirect URLs, and set
+   Site URL to the same origin. Until this is done, magic-link emails will send
+   users to `localhost` and sign-in will fail.
+
+2. **Production branch (optional).** Vercel → Settings → Git → Production Branch
+   → change to `main`. The API silently ignores this field. Both branches
+   currently point at the same commit, so nothing is broken either way.
+
+## Access control
+
+The whole app is behind Supabase sign-in — middleware requires a session on
+every route, API routes included, because each valuation page spends paid FMP
+API calls. Signup is further limited by this Supabase project's `allowed_users`
+allowlist.
+
+If Supabase is not configured, the gate fails closed in production (503) rather
+than serving the API to the open internet. Local development runs ungated.
+
+## Verifying a deployment
+
+Sign in, then open `/api/health`. It pings all 13 FMP endpoints and should report
+`"healthy": true, "passed": 13, "total": 13`. It is behind the auth gate because
+it spends quota.
 
 ## Other hosts
 
-Anything that runs a Node server works — Netlify, Render, Fly.io, Railway, or a
-container. Build with `npm run build`, serve with `npm start`, and set the same
-three environment variables.
-
-Static hosts (GitHub Pages, S3) will **not** work. The app renders on the server
-specifically so the FMP key stays out of the client bundle; exporting it
-statically would either break the data layer or leak the key.
+Anything running a Node server works — Netlify, Render, Fly.io, Railway, or a
+container. Build with `npm run build`, serve with `npm start`, set the same three
+variables. Static hosts (GitHub Pages, S3) will not work: the app renders on the
+server so the FMP key stays out of the client bundle.
 
 ## Cost and quota
 
-Every page view spends FMP API calls against your account. Responses are cached
-server-side (fundamentals 12h, ratios and estimates 6h, quotes 30s), so repeat
-views of the same ticker are cheap — but a publicly reachable deployment means
-anyone who finds the URL is spending your quota. See the access-control note in
-the README before sharing the link widely.
+Every page view spends FMP API calls. Responses are cached server-side
+(fundamentals 12h, ratios and estimates 6h, quotes 30s), so repeat views of the
+same ticker are cheap.
