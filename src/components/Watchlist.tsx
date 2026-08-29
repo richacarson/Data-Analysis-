@@ -38,7 +38,6 @@ export function Watchlist() {
   const [session, setSession] = useState<Session | null>(null);
   const [symbols, setSymbols] = useState<string[]>([]);
   const [input, setInput] = useState('');
-  const [email, setEmail] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -129,21 +128,7 @@ export function Watchlist() {
     }
   }
 
-  async function signIn(e: React.FormEvent) {
-    e.preventDefault();
-    if (!supabase) return;
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined },
-    });
-    setStatus(error ? error.message : 'Check your email for a sign-in link.');
-  }
-
-  const subtitle = !supabase
-    ? 'Stored in this browser'
-    : session
-      ? session.user.email
-      : 'Stored in this browser — sign in to sync';
+  const subtitle = session ? 'Synced to your account' : 'Stored in this browser';
 
   return (
     <Panel title="Watchlist" subtitle={subtitle}>
@@ -187,34 +172,6 @@ export function Watchlist() {
             </li>
           ))}
         </ul>
-      )}
-
-      {supabase && !session && (
-        <form onSubmit={signIn} className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3">
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            aria-label="Email address for sign-in link"
-            className="w-56 rounded-md border border-line bg-panel2 px-2.5 py-1.5 text-[13px] outline-none placeholder:text-muted focus:border-accent"
-          />
-          <button className="rounded-md border border-line bg-panel2 px-3 py-1.5 text-[13px] font-medium hover:border-accent hover:text-accent">
-            Email me a sign-in link
-          </button>
-        </form>
-      )}
-
-      {supabase && session && (
-        <div className="border-t border-line px-4 py-3">
-          <button
-            onClick={() => supabase.auth.signOut()}
-            className="text-[12px] text-muted hover:text-ink"
-          >
-            Sign out
-          </button>
-        </div>
       )}
 
       {status && <p className="px-4 pb-3 text-[12px] text-muted">{status}</p>}

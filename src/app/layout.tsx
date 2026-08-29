@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import './globals.css';
 import { SearchBar } from '@/components/SearchBar';
+import { UserMenu } from '@/components/UserMenu';
 
 export const metadata: Metadata = {
   title: 'Equity Lens — deep fundamental analysis',
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="text-[15px] font-semibold tracking-tight">Equity Lens</span>
             </Link>
             <SearchBar />
+            <UserMenu />
           </div>
         </header>
         <main className="mx-auto max-w-[1400px] px-5 py-6">{children}</main>
