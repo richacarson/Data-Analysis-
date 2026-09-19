@@ -27,7 +27,12 @@ import {
   type MultipleValuation,
 } from './multiples';
 import { reverseDcf } from './reverse-dcf';
-import { cashFlowModelsApply, isFinancialSector } from './applicability';
+import {
+  cashFlowModelsApply,
+  isFinancialSector,
+  isRealEstateTrust,
+  perShareModelsApply,
+} from './applicability';
 import { clamp, impliedCostOfDebt, wacc } from './wacc';
 
 /** Long-run US equity risk premium. Overridable per valuation. */
@@ -177,11 +182,26 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
 
   const baseFcf = latestFcf?.freeCashFlow ?? 0;
   const fcfVerdict = cashFlowModelsApply(profile.sector, profile.industry, baseFcf);
-  const fcfModelApplies = fcfVerdict.applies;
+
+  // If the statements are denominated differently from the quote, no per-share
+  // model can be compared to the price at all — including the cash flow ones.
+  const currencyVerdict = perShareModelsApply(latestIncome?.reportedCurrency, profile.currency);
+  const unitsComparable = currencyVerdict.applies;
+  const fcfModelApplies = fcfVerdict.applies && unitsComparable;
 
   const modelNotes: Array<{ label: string; reason: string }> = [];
-  if (fcfVerdict.reason) {
+  if (!currencyVerdict.applies && currencyVerdict.reason) {
+    modelNotes.push({ label: 'All fair-value models', reason: currencyVerdict.reason });
+  }
+  if (fcfVerdict.reason && currencyVerdict.applies) {
     modelNotes.push({ label: 'Cash flow models', reason: fcfVerdict.reason });
+  }
+  if (isRealEstateTrust(profile.sector, profile.industry) && currencyVerdict.applies) {
+    modelNotes.push({
+      label: 'Earnings-based models',
+      reason:
+        'Read with care for a REIT: property depreciation is a large non-cash charge, so reported earnings sit well below distributable cash and earnings-based fair values understate the business. Funds from operations is the sector standard.',
+    });
   }
 
   // ---- Model 1: FCF discounted cash flow ----------------------------------
@@ -240,10 +260,13 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
   const forwardEps = firstEstimate?.epsAvg ?? 0;
 
   const multiples: MultipleValuation[] = [];
+  // Implied prices are per-share too, so they inherit the currency constraint.
+  if (unitsComparable) {
   if (eps > 0) multiples.push(valueOnMultiple('Historical P/E', ratios?.priceToEarningsRatioTTM ?? 0, eps, price));
   if (forwardEps > 0) multiples.push(valueOnMultiple('Forward P/E (consensus)', price / forwardEps, forwardEps, price));
   if (fcfPerShare > 0) multiples.push(valueOnMultiple('P/FCF', ratios?.priceToFreeCashFlowRatioTTM ?? 0, fcfPerShare, price));
   if (bookPerShare > 0) multiples.push(valueOnMultiple('P/B', ratios?.priceToBookRatioTTM ?? 0, bookPerShare, price));
+  }
 
   // ---- Growth-adjusted valuation ------------------------------------------
   const trailingPeg = peg(ratios?.priceToEarningsRatioTTM ?? 0, (epsCagr5y ?? 0) * 100);
@@ -274,9 +297,13 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
   // ---- Consensus of models -------------------------------------------------
   const allCandidates = [
     { label: 'FCF DCF', value: fcfDcf.fairValuePerShare, applies: fcfModelApplies },
-    { label: 'Earnings DCF', value: epsDcf.fairValuePerShare, applies: true },
-    { label: 'Earnings power', value: epvPerShare, applies: true },
-    { label: 'Graham number', value: grahamNumber(eps, bookPerShare) ?? 0, applies: true },
+    { label: 'Earnings DCF', value: epsDcf.fairValuePerShare, applies: unitsComparable },
+    { label: 'Earnings power', value: epvPerShare, applies: unitsComparable },
+    {
+      label: 'Graham number',
+      value: grahamNumber(eps, bookPerShare) ?? 0,
+      applies: unitsComparable,
+    },
   ];
 
   for (const c of allCandidates) {
@@ -345,7 +372,13 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     upside: price > 0 ? blendedFairValue / price - 1 : 0,
     modelSpread: candidates,
     modelNotes,
-    applicability: { isFinancial, fcfModelApplies, reverseUsable },
+    applicability: {
+      isFinancial,
+      fcfModelApplies,
+      reverseUsable: reverseUsable && currencyVerdict.applies,
+      unitsComparable,
+      reportingCurrency: latestIncome?.reportedCurrency ?? null,
+    },
     sensitivity: grid,
 
     growthAdjusted: {
@@ -377,6 +410,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
       balance: balance.slice(0, 10),
     },
 
+    hasInterestExpense: (latestIncome?.interestExpense ?? 0) > 0,
     ratios,
     metrics,
   };

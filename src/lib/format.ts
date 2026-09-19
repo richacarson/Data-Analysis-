@@ -62,3 +62,37 @@ export function toneClass(n: number | null | undefined): string {
 export function fiscalYear(date: string): string {
   return date.slice(0, 4);
 }
+
+/**
+ * A valuation multiple, shown only when it means something.
+ *
+ * A negative multiple is an artifact of a negative denominator, not a cheap
+ * stock: McDonald's price-to-book reads -172 because buybacks have taken its
+ * book equity below zero, and a loss-making company's P/E is negative for the
+ * same reason. Printing either invites exactly the wrong reading.
+ */
+export function multiple(n: number | null | undefined, digits = 2): string {
+  if (n === null || n === undefined || !Number.isFinite(n) || n <= 0) return 'n/m';
+  return n.toFixed(digits);
+}
+
+/**
+ * A ratio where zero is a real answer but a negative one is not — debt to
+ * equity is legitimately zero for a debt-free company, and negative only when
+ * equity itself has gone negative.
+ */
+export function nonNegativeRatio(n: number | null | undefined, digits = 2): string {
+  if (n === null || n === undefined || !Number.isFinite(n) || n < 0) return 'n/m';
+  return n.toFixed(digits);
+}
+
+/**
+ * Interest coverage. FMP reports zero both for a company that cannot cover its
+ * interest and for one with no interest expense to cover — opposite meanings
+ * from the same number — so the caller passes whether any interest was charged.
+ */
+export function coverage(n: number | null | undefined, hasInterestExpense: boolean): string {
+  if (!hasInterestExpense) return 'No interest expense';
+  if (n === null || n === undefined || !Number.isFinite(n)) return '—';
+  return n.toFixed(2);
+}

@@ -3,7 +3,17 @@ import { buildValuation } from '@/lib/valuation/build';
 import { Badge, Panel, RangeBar, Row, Stat } from '@/components/ui';
 import { CashFlowChart, EpsProjectionChart, HistoryChart, ModelSpreadChart } from '@/components/Charts';
 import { SensitivityTable } from '@/components/SensitivityTable';
-import { bigMoney, fiscalYear, money, num, pct, signedPct } from '@/lib/format';
+import {
+  bigMoney,
+  coverage,
+  fiscalYear,
+  money,
+  multiple,
+  nonNegativeRatio,
+  num,
+  pct,
+  signedPct,
+} from '@/lib/format';
 
 export const revalidate = 3600;
 
@@ -325,18 +335,18 @@ export default async function StockPage({
           title="Growth-adjusted valuation" subtitle="Price relative to earnings growth">
           <Row
             label="PEG (trailing P/E ÷ 5y EPS growth)"
-            value={num(growthAdjusted.pegTrailing)}
+            value={multiple(growthAdjusted.pegTrailing)}
             hint="Below 1.0 suggests growth is cheap relative to price"
           />
-          <Row label="PEG (forward consensus)" value={num(growthAdjusted.pegForward)} />
-          <Row label="PEG — FMP trailing" value={num(growthAdjusted.pegFromApi)} />
-          <Row label="PEG — FMP forward" value={num(growthAdjusted.forwardPegFromApi)} />
-          <Row label="P/E (TTM)" value={num(report.ratios?.priceToEarningsRatioTTM)} />
-          <Row label="EV / EBITDA" value={num(report.metrics?.evToEBITDATTM)} />
-          <Row label="EV / free cash flow" value={num(report.metrics?.evToFreeCashFlowTTM)} />
-          <Row label="EV / sales" value={num(report.metrics?.evToSalesTTM)} />
-          <Row label="Price / free cash flow" value={num(report.ratios?.priceToFreeCashFlowRatioTTM)} />
-          <Row label="Price / book" value={num(report.ratios?.priceToBookRatioTTM)} />
+          <Row label="PEG (forward consensus)" value={multiple(growthAdjusted.pegForward)} />
+          <Row label="PEG — FMP trailing" value={multiple(growthAdjusted.pegFromApi)} />
+          <Row label="PEG — FMP forward" value={multiple(growthAdjusted.forwardPegFromApi)} />
+          <Row label="P/E (TTM)" value={multiple(report.ratios?.priceToEarningsRatioTTM)} />
+          <Row label="EV / EBITDA" value={multiple(report.metrics?.evToEBITDATTM)} />
+          <Row label="EV / free cash flow" value={multiple(report.metrics?.evToFreeCashFlowTTM)} />
+          <Row label="EV / sales" value={multiple(report.metrics?.evToSalesTTM)} />
+          <Row label="Price / free cash flow" value={multiple(report.ratios?.priceToFreeCashFlowRatioTTM)} />
+          <Row label="Price / book" value={multiple(report.ratios?.priceToBookRatioTTM)} />
           <Row
             label="Graham number"
             value={models.grahamNumber ? money(models.grahamNumber, currency) : '—'}
@@ -382,6 +392,11 @@ export default async function StockPage({
             tone={quality.piotroskiScore !== null ? quality.piotroskiScore - 5 : undefined}
           />
           <Row
+            label="Interest coverage"
+            value={coverage(report.ratios?.interestCoverageRatioTTM, report.hasInterestExpense)}
+            hint="Operating profit over interest expense"
+          />
+          <Row
             label="Altman Z-score"
             value={num(quality.altmanZScore)}
             tone={quality.altmanZScore !== null ? quality.altmanZScore - 3 : undefined}
@@ -409,7 +424,7 @@ export default async function StockPage({
             tone={quality.yields.shareholderYield}
           />
           <Row label="Net debt / EBITDA" value={num(report.metrics?.netDebtToEBITDATTM)} />
-          <Row label="Debt / equity" value={num(report.ratios?.debtToEquityRatioTTM)} />
+          <Row label="Debt / equity" value={nonNegativeRatio(report.ratios?.debtToEquityRatioTTM)} hint="Negative when buybacks have taken book equity below zero" />
         </Panel>
 
         {/* ---- Cost of capital detail ---- */}

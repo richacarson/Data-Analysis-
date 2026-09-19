@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { cashFlowModelsApply } from '../applicability';
+import {
+  cashFlowModelsApply,
+  isRealEstateTrust,
+  perShareModelsApply,
+} from '../applicability';
 import { usablePeg } from '../multiples';
+import { coverage, multiple, nonNegativeRatio } from '../../format';
 import { discountedCashFlow } from '../dcf';
 import { reverseDcf } from '../reverse-dcf';
 
@@ -83,5 +88,63 @@ describe('usablePeg', () => {
     expect(usablePeg(null)).toBeNull();
     expect(usablePeg(undefined)).toBeNull();
     expect(usablePeg(Number.POSITIVE_INFINITY)).toBeNull();
+  });
+});
+
+describe('perShareModelsApply', () => {
+  it('withholds per-share models when the ADR trades in a different currency', () => {
+    // TSMC files in TWD (EPS 333, book 1,248) against a ~$435 ADR. Mixing them
+    // put the Graham number near $3,481 and showed ~700% upside.
+    const r = perShareModelsApply('TWD', 'USD');
+    expect(r.applies).toBe(false);
+    expect(r.reason).toMatch(/TWD/);
+    expect(r.reason).toMatch(/USD/);
+  });
+
+  it('allows them when the statements and the quote share a currency', () => {
+    expect(perShareModelsApply('USD', 'USD').applies).toBe(true);
+    expect(perShareModelsApply('usd', 'USD').applies).toBe(true);
+  });
+
+  it('does not block a company whose reporting currency is unknown', () => {
+    expect(perShareModelsApply(undefined, 'USD').applies).toBe(true);
+    expect(perShareModelsApply('EUR', undefined).applies).toBe(true);
+  });
+});
+
+describe('isRealEstateTrust', () => {
+  it('flags REITs so earnings-based models are read with care', () => {
+    expect(isRealEstateTrust('Real Estate', 'REIT - Retail')).toBe(true);
+  });
+  it('leaves operating companies alone', () => {
+    expect(isRealEstateTrust('Technology', 'Semiconductors')).toBe(false);
+  });
+});
+
+describe('meaningful multiples', () => {
+  it('refuses a negative price-to-book instead of printing it', () => {
+    // McDonald's book equity is negative from buybacks; FMP reports P/B -172.46.
+    expect(multiple(-172.45764222873902)).toBe('n/m');
+  });
+
+  it('refuses a negative P/E and a negative price-to-free-cash-flow', () => {
+    expect(multiple(-5.810077519379845)).toBe('n/m'); // Rivian
+    expect(multiple(-16.49716612)).toBe('n/m'); // NextEra
+  });
+
+  it('keeps a genuine multiple', () => {
+    expect(multiple(28.515126927089373)).toBe('28.52');
+  });
+
+  it('keeps zero debt to equity but refuses a negative one', () => {
+    expect(nonNegativeRatio(0)).toBe('0.00');
+    expect(nonNegativeRatio(-53.364613880742915)).toBe('n/m');
+  });
+
+  it('distinguishes no interest expense from failing to cover it', () => {
+    // FMP reports 0 for both cases; they mean opposite things.
+    expect(coverage(0, false)).toBe('No interest expense');
+    expect(coverage(0, true)).toBe('0.00');
+    expect(coverage(7.81, true)).toBe('7.81');
   });
 });
