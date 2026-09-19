@@ -139,33 +139,33 @@ export function Watchlist() {
           onKeyDown={(e) => e.key === 'Enter' && add(input)}
           placeholder="Add ticker…"
           aria-label="Add a ticker to your watchlist"
-          className="w-40 rounded-md border border-line bg-panel2 px-2.5 py-1.5 text-[13px] outline-none placeholder:text-muted focus:border-accent"
+          className="w-40 border border-line bg-card px-2.5 py-1.5 text-[13px] outline-none placeholder:text-t3 focus:border-lineActive"
         />
         <button
           onClick={() => add(input)}
-          className="rounded-md border border-line bg-panel2 px-3 py-1.5 text-[13px] font-medium hover:border-accent hover:text-accent"
+          className="border border-line bg-card px-3 py-1.5 text-[13px] font-medium hover:border-lineActive hover:text-gold"
         >
           Add
         </button>
       </div>
 
       {loading ? (
-        <p className="px-4 py-4 text-[13px] text-muted">Loading…</p>
+        <p className="px-4 py-4 text-[13px] text-t3">Loading…</p>
       ) : symbols.length === 0 ? (
-        <p className="px-4 py-4 text-[13px] text-muted">
+        <p className="px-4 py-4 text-[13px] text-t3">
           No tickers yet. Add one above to track it here.
         </p>
       ) : (
         <ul className="flex flex-wrap gap-2 px-4 py-3">
           {symbols.map((symbol) => (
-            <li key={symbol} className="flex items-center gap-1.5 rounded-md border border-line bg-panel2 pl-3 pr-1.5 py-1">
-              <Link href={`/stock/${symbol}`} className="text-[13px] font-medium hover:text-accent">
+            <li key={symbol} className="flex items-center gap-1.5 border border-line bg-card pl-3 pr-1.5 py-1">
+              <Link href={`/stock/${symbol}`} className="text-[13px] font-medium hover:text-gold">
                 {symbol}
               </Link>
               <button
                 onClick={() => remove(symbol)}
                 aria-label={`Remove ${symbol}`}
-                className="rounded px-1 text-[13px] leading-none text-muted hover:text-neg"
+                className="px-1 text-[13px] leading-none text-t3 hover:text-dn"
               >
                 ×
               </button>
@@ -174,7 +174,7 @@ export function Watchlist() {
         </ul>
       )}
 
-      {status && <p className="px-4 pb-3 text-[12px] text-muted">{status}</p>}
+      {status && <p className="px-4 pb-3 text-[12px] text-t3">{status}</p>}
     </Panel>
   );
 }

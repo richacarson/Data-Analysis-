@@ -53,10 +53,10 @@ export function signedPct(n: number | null | undefined, digits = 1): string {
 
 /** Tailwind class for a value where positive is good and negative is bad. */
 export function toneClass(n: number | null | undefined): string {
-  if (n === null || n === undefined || !Number.isFinite(n)) return 'text-muted';
-  if (n > 0.0001) return 'text-pos';
-  if (n < -0.0001) return 'text-neg';
-  return 'text-ink';
+  if (n === null || n === undefined || !Number.isFinite(n)) return 'text-t3';
+  if (n > 0.0001) return 'text-up';
+  if (n < -0.0001) return 'text-dn';
+  return 'text-t1';
 }
 
 export function fiscalYear(date: string): string {

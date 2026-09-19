@@ -83,21 +83,21 @@ export function SearchBar() {
         onKeyDown={onKeyDown}
         placeholder="Search ticker or company…"
         aria-label="Search for a stock"
-        className="w-full rounded-md border border-line bg-panel px-3 py-1.5 text-[13px] text-ink outline-none placeholder:text-muted focus:border-accent"
+        className="w-full border border-line bg-surface px-3 py-1.5 text-[13px] text-t1 outline-none placeholder:text-t3 focus:border-lineActive"
       />
       {open && results.length > 0 && (
-        <ul className="absolute left-0 right-0 top-full z-40 mt-1 max-h-80 overflow-auto rounded-md border border-line bg-panel2 py-1 shadow-xl">
+        <ul className="absolute left-0 right-0 top-full z-40 mt-1 max-h-80 overflow-auto border border-line bg-card py-1 shadow-xl">
           {results.map((r, i) => (
             <li key={`${r.symbol}-${i}`}>
               <button
                 onClick={() => go(r.symbol)}
                 onMouseEnter={() => setActive(i)}
                 className={`flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-[13px] ${
-                  i === active ? 'bg-accent/15' : ''
+                  i === active ? 'bg-gold/[0.15]' : ''
                 }`}
               >
-                <span className="font-semibold text-ink">{r.symbol}</span>
-                <span className="truncate text-[12px] text-muted">{r.name}</span>
+                <span className="font-semibold text-t1">{r.symbol}</span>
+                <span className="truncate text-[12px] text-t3">{r.name}</span>
               </button>
             </li>
           ))}

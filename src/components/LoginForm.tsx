@@ -105,7 +105,7 @@ export function LoginForm({ next }: { next?: string }) {
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
           aria-label="Email address"
-          className="w-full rounded-md border border-line bg-panel2 px-3 py-2 text-[13px] outline-none placeholder:text-muted focus:border-accent"
+          className="w-full border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-t3 focus:border-lineActive"
         />
         <input
           type="password"
@@ -115,23 +115,23 @@ export function LoginForm({ next }: { next?: string }) {
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
           aria-label="Password"
-          className="w-full rounded-md border border-line bg-panel2 px-3 py-2 text-[13px] outline-none placeholder:text-muted focus:border-accent"
+          className="w-full border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-t3 focus:border-lineActive"
         />
         <button
           type="submit"
           disabled={stage === 'signing-in'}
-          className="w-full rounded-md bg-accent px-3 py-2 text-[13px] font-medium text-white disabled:opacity-60"
+          className="w-full bg-gold px-3 py-2 text-[13px] font-semibold text-bg disabled:opacity-60"
         >
           {stage === 'signing-in' ? 'Signing in…' : 'Sign in'}
         </button>
-        {error && <p className="text-[12px] text-neg">{error}</p>}
+        {error && <p className="text-[12px] text-dn">{error}</p>}
         <button
           type="button"
           onClick={() => {
             setError('');
             setStage('email');
           }}
-          className="w-full text-[12px] text-muted hover:text-ink"
+          className="w-full text-[12px] text-t3 hover:text-t1"
         >
           No password yet? Email me a code instead
         </button>
@@ -142,8 +142,8 @@ export function LoginForm({ next }: { next?: string }) {
   if (stage === 'code' || stage === 'verifying') {
     return (
       <form onSubmit={verifyCode} className="mt-5 space-y-3">
-        <p className="text-[13px] leading-relaxed text-muted">
-          We sent a six-digit code to <span className="text-ink">{email}</span>. Enter it below.
+        <p className="text-[13px] leading-relaxed text-t3">
+          We sent a six-digit code to <span className="text-t1">{email}</span>. Enter it below.
         </p>
         <input
           required
@@ -154,16 +154,16 @@ export function LoginForm({ next }: { next?: string }) {
           autoComplete="one-time-code"
           placeholder="123456"
           aria-label="Six-digit sign-in code"
-          className="tabular w-full rounded-md border border-line bg-panel2 px-3 py-2 text-center text-[18px] tracking-[0.3em] outline-none placeholder:tracking-normal placeholder:text-muted focus:border-accent"
+          className="tabular w-full border border-line bg-card px-3 py-2 text-center text-[18px] tracking-[0.3em] outline-none placeholder:tracking-normal placeholder:text-t3 focus:border-lineActive"
         />
         <button
           type="submit"
           disabled={stage === 'verifying'}
-          className="w-full rounded-md bg-accent px-3 py-2 text-[13px] font-medium text-white disabled:opacity-60"
+          className="w-full bg-gold px-3 py-2 text-[13px] font-semibold text-bg disabled:opacity-60"
         >
           {stage === 'verifying' ? 'Signing in…' : 'Sign in'}
         </button>
-        {error && <p className="text-[12px] text-neg">{error}</p>}
+        {error && <p className="text-[12px] text-dn">{error}</p>}
         <button
           type="button"
           onClick={() => {
@@ -171,7 +171,7 @@ export function LoginForm({ next }: { next?: string }) {
             setError('');
             setStage('password');
           }}
-          className="w-full text-[12px] text-muted hover:text-ink"
+          className="w-full text-[12px] text-t3 hover:text-t1"
         >
           Back to password sign-in
         </button>
@@ -189,16 +189,16 @@ export function LoginForm({ next }: { next?: string }) {
         onChange={(e) => setEmail(e.target.value)}
         placeholder="you@example.com"
         aria-label="Email address"
-        className="w-full rounded-md border border-line bg-panel2 px-3 py-2 text-[13px] outline-none placeholder:text-muted focus:border-accent"
+        className="w-full border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-t3 focus:border-lineActive"
       />
       <button
         type="submit"
         disabled={stage === 'sending'}
-        className="w-full rounded-md bg-accent px-3 py-2 text-[13px] font-medium text-white disabled:opacity-60"
+        className="w-full bg-gold px-3 py-2 text-[13px] font-semibold text-bg disabled:opacity-60"
       >
         {stage === 'sending' ? 'Sending…' : 'Email me a code'}
       </button>
-      {error && <p className="text-[12px] text-neg">{error}</p>}
+      {error && <p className="text-[12px] text-dn">{error}</p>}
     </form>
   );
 }

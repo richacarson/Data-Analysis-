@@ -30,12 +30,12 @@ export default async function StockPage({
     return (
       <div className="panel p-8">
         <h1 className="text-lg font-semibold">Could not load {symbol.toUpperCase()}</h1>
-        <p className="mt-2 text-[13px] text-muted">
+        <p className="mt-2 text-[13px] text-t3">
           {error instanceof Error ? error.message : 'Unknown error'}
         </p>
-        <p className="mt-4 text-[13px] text-muted">
+        <p className="mt-4 text-[13px] text-t3">
           Visit{' '}
-          <Link href="/api/health" className="text-accent underline">
+          <Link href="/api/health" className="text-gold underline">
             /api/health
           </Link>{' '}
           to see which data feeds are responding.
@@ -71,18 +71,18 @@ export default async function StockPage({
     <div className="space-y-4">
       {/* A feed that failed is called out rather than being rendered as a zero. */}
       {report.dataIssues.length > 0 && (
-        <div className="rounded-lg border border-neg/40 bg-neg/10 px-4 py-3 text-[12px]">
-          <p className="font-medium text-ink">
+        <div className="border border-dn/40 bg-dn/10 px-4 py-3 text-[12px]">
+          <p className="font-medium text-t1">
             Some data feeds did not respond — the panels below them may be incomplete.
           </p>
-          <ul className="mt-1.5 list-inside list-disc text-muted">
+          <ul className="mt-1.5 list-inside list-disc text-t3">
             {report.dataIssues.map((issue) => (
               <li key={issue}>{issue}</li>
             ))}
           </ul>
-          <p className="mt-1.5 text-muted">
+          <p className="mt-1.5 text-t3">
             Run{' '}
-            <Link href="/api/health" className="text-accent underline">
+            <Link href="/api/health" className="text-gold underline">
               /api/health
             </Link>{' '}
             to check every endpoint against your key.
@@ -92,36 +92,41 @@ export default async function StockPage({
 
       {/* ---- Company header ---- */}
       <div className="panel">
-        <div className="flex flex-wrap items-start justify-between gap-4 px-5 py-4">
-          <div className="flex items-start gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-5 px-5 py-4">
+          <div className="flex items-start gap-3.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={profile.image}
               alt=""
-              className="h-11 w-11 rounded bg-panel2 object-contain p-1"
+              className="h-12 w-12 border border-line bg-card object-contain p-1.5"
             />
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-[20px] font-semibold tracking-tight">{profile.companyName}</h1>
-                <span className="rounded bg-panel2 px-1.5 py-0.5 text-[11px] text-muted">
-                  {profile.exchange}: {report.symbol}
-                </span>
-              </div>
-              <p className="mt-0.5 text-[12px] text-muted">
+              <p className="eyebrow">
+                {profile.exchange} · {report.symbol}
+              </p>
+              <h1 className="mt-1 font-serif text-[24px] leading-tight tracking-tight text-t1">
+                {profile.companyName}
+              </h1>
+              <p className="mt-1 text-[12px] text-t4">
                 {profile.sector} · {profile.industry} · {profile.country}
               </p>
             </div>
           </div>
           <div className="text-right">
-            <div className="tabular text-[26px] font-semibold leading-none">
+            <p className="eyebrow-muted">Last price</p>
+            <div className="tabular mt-1 text-[28px] font-semibold leading-none text-t1">
               {money(report.price, currency)}
             </div>
-            <div className={`mt-1 text-[13px] ${profile.change >= 0 ? 'text-pos' : 'text-neg'}`}>
+            <div
+              className={`tabular mt-1.5 text-[13px] ${profile.change >= 0 ? 'text-up' : 'text-dn'}`}
+            >
               {profile.change >= 0 ? '+' : ''}
               {num(profile.change)} ({signedPct(profile.changePercentage / 100)})
             </div>
           </div>
         </div>
+        {/* The gold rule is the brand's one accent per view. */}
+        <div className="h-px bg-gold/40" />
       </div>
 
       {/* ---- Verdict strip ---- */}
@@ -158,6 +163,7 @@ export default async function StockPage({
       <div className="grid gap-4 lg:grid-cols-3">
         {/* ---- Model spread ---- */}
         <Panel
+          eyebrow="Valuation"
           title="Fair value by model"
           subtitle={`Current price ${money(report.price, currency)}`}
           className="lg:col-span-2"
@@ -185,12 +191,13 @@ export default async function StockPage({
         </Panel>
 
         {/* ---- Reverse DCF ---- */}
-        <Panel title="Reverse DCF" subtitle="What is priced in?">
-          <div className="px-4 py-4">
-            <p className="text-[12px] leading-relaxed text-muted">
+        <Panel eyebrow="What is priced in"
+          title="Reverse DCF" subtitle="What is priced in?">
+          <div className="border-b border-line px-4 py-4">
+            <p className="pullquote">
               To justify {money(report.price, currency)} today, free cash flow must compound at
               roughly{' '}
-              <span className="font-semibold text-ink">
+              <span className="not-italic font-semibold text-gold">
                 {pct(models.reverseDcf.impliedCagr)}
               </span>{' '}
               a year for {models.fcfDcf.assumptions.years} years.
@@ -224,7 +231,8 @@ export default async function StockPage({
 
       {/* ---- Earnings-projection DCF ---- */}
       <Panel
-        title="DCF on analyst earnings projections"
+        eyebrow="Earnings model"
+          title="DCF on analyst earnings projections"
         subtitle={`Discounted at cost of equity ${pct(models.earningsDcf.discountRate)} · ${pct(
           models.earningsDcf.fcfConversion,
           0,
@@ -250,6 +258,7 @@ export default async function StockPage({
       <div className="grid gap-4 lg:grid-cols-2">
         {/* ---- FCF DCF ---- */}
         <Panel
+          eyebrow="Cash flow model"
           title="Free cash flow DCF"
           subtitle={`${models.fcfDcf.assumptions.years}y forecast · fade to ${pct(
             models.fcfDcf.assumptions.terminalGrowth,
@@ -272,7 +281,8 @@ export default async function StockPage({
         </Panel>
 
         {/* ---- Growth-adjusted multiples ---- */}
-        <Panel title="Growth-adjusted valuation" subtitle="Price relative to earnings growth">
+        <Panel eyebrow="Multiples"
+          title="Growth-adjusted valuation" subtitle="Price relative to earnings growth">
           <Row
             label="PEG (trailing P/E ÷ 5y EPS growth)"
             value={num(growthAdjusted.pegTrailing)}
@@ -303,7 +313,8 @@ export default async function StockPage({
 
       {/* ---- Sensitivity ---- */}
       <Panel
-        title="Sensitivity — fair value per share"
+        eyebrow="Assumption range"
+          title="Sensitivity — fair value per share"
         subtitle="Discount rate (rows) against terminal growth (columns)"
       >
         <SensitivityTable grid={report.sensitivity} price={report.price} currency={currency} />
@@ -311,7 +322,8 @@ export default async function StockPage({
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* ---- Quality ---- */}
-        <Panel title="Quality & returns">
+        <Panel eyebrow="Business quality"
+          title="Quality & returns">
           <Row label="Return on invested capital" value={pct(quality.roic)} tone={quality.roic} />
           <Row label="Cost of capital" value={pct(quality.wacc)} />
           <Row
@@ -338,7 +350,8 @@ export default async function StockPage({
         </Panel>
 
         {/* ---- Owner earnings & yields ---- */}
-        <Panel title="Owner earnings & shareholder yield">
+        <Panel eyebrow="Cash returns"
+          title="Owner earnings & shareholder yield">
           <Row label="Owner earnings" value={bigMoney(quality.ownerEarnings, currency)} />
           <Row
             label="Owner earnings yield"
@@ -360,7 +373,8 @@ export default async function StockPage({
         </Panel>
 
         {/* ---- Cost of capital detail ---- */}
-        <Panel title="Cost of capital">
+        <Panel eyebrow="Discount rate"
+          title="Cost of capital">
           <Row label="Risk-free rate (10y)" value={pct(costOfCapital.riskFreeRate)} />
           <Row label="Equity risk premium" value={pct(costOfCapital.equityRiskPremium)} />
           <Row label="Beta" value={num(profile.beta)} />
@@ -375,7 +389,8 @@ export default async function StockPage({
       </div>
 
       {/* ---- History ---- */}
-      <Panel title="Reported history" subtitle="Revenue, net income and free cash flow">
+      <Panel eyebrow="Track record"
+          title="Reported history" subtitle="Revenue, net income and free cash flow">
         <HistoryChart data={historyData} />
         <div className="grid grid-cols-2 divide-x divide-line border-t border-line md:grid-cols-4">
           <Stat label="Revenue CAGR (5y)" value={pct(growth.revenueCagr5y)} tone={growth.revenueCagr5y} />

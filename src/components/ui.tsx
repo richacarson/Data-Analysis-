@@ -4,18 +4,23 @@ import { toneClass } from '@/lib/format';
 export function Panel({
   title,
   subtitle,
+  eyebrow,
   children,
   className = '',
 }: {
   title: string;
   subtitle?: ReactNode;
+  eyebrow?: string;
   children: ReactNode;
   className?: string;
 }) {
   return (
     <section className={`panel ${className}`}>
       <div className="panel-head">
-        <h2 className="panel-title">{title}</h2>
+        <div>
+          {eyebrow ? <p className="eyebrow mb-1">{eyebrow}</p> : null}
+          <h2 className="panel-title">{title}</h2>
+        </div>
         {subtitle ? <span className="panel-sub">{subtitle}</span> : null}
       </div>
       {children}
@@ -56,15 +61,22 @@ export function Stat({
   sub?: ReactNode;
 }) {
   return (
-    <div className="px-4 py-3">
+    <div className="px-4 py-3.5">
       <div className="stat-label">{label}</div>
-      <div className={`stat-value ${tone !== undefined ? toneClass(tone) : ''}`}>{value}</div>
-      {sub ? <div className="mt-0.5 text-[11px] text-muted">{sub}</div> : null}
+      <div className={`stat-value mt-1.5 ${tone !== undefined ? toneClass(tone) : ''}`}>
+        {value}
+      </div>
+      {sub ? <div className="mt-1 text-[11px] leading-snug text-t4">{sub}</div> : null}
     </div>
   );
 }
 
-/** Horizontal bar showing where the current price sits inside a value range. */
+/**
+ * Where the current price sits inside a modelled value range.
+ *
+ * Drawn as discrete segments rather than a gradient — the brand system is flat,
+ * and steps are easier to read against than a continuous wash.
+ */
 export function RangeBar({
   low,
   high,
@@ -82,22 +94,27 @@ export function RangeBar({
   // A price outside the modelled range is itself the signal, so say so.
   const outside = positionPct < 0 || positionPct > 100;
 
+  const segments = ['bg-dn/55', 'bg-dn/30', 'bg-elevated', 'bg-up/30', 'bg-up/55'];
+
   return (
     <div className="px-4 py-3">
-      <div className="relative h-2 rounded-full bg-gradient-to-r from-neg via-panel2 to-pos">
+      <div className="relative flex h-1.5 gap-px">
+        {segments.map((tone, i) => (
+          <div key={i} className={`flex-1 ${tone}`} />
+        ))}
         <div
-          className="absolute -top-1 h-4 w-0.5 bg-ink"
+          className="absolute -top-1 h-3.5 w-0.5 bg-t1"
           style={{ left: `${clamped}%` }}
           aria-hidden
         />
       </div>
-      <div className="mt-2 flex justify-between text-[11px] text-muted">
-        <span>Bear</span>
-        <span className={outside ? 'text-neg' : 'text-ink'}>
+      <div className="mt-2 flex justify-between text-[10px] uppercase tracking-label">
+        <span className="text-t4">Bear</span>
+        <span className={outside ? 'text-dn' : 'text-t2'}>
           {markerLabel}
-          {outside ? ' (outside range)' : ''}
+          {outside ? ' · outside range' : ''}
         </span>
-        <span>Bull</span>
+        <span className="text-t4">Bull</span>
       </div>
     </div>
   );
@@ -105,11 +122,13 @@ export function RangeBar({
 
 export function Badge({ children, tone }: { children: ReactNode; tone: 'pos' | 'neg' | 'flat' }) {
   const styles = {
-    pos: 'bg-pos/15 text-pos',
-    neg: 'bg-neg/15 text-neg',
-    flat: 'bg-line text-muted',
+    pos: 'border-up/40 bg-up/10 text-up',
+    neg: 'border-dn/40 bg-dn/10 text-dn',
+    flat: 'border-line bg-card text-t3',
   }[tone];
   return (
-    <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${styles}`}>{children}</span>
+    <span className={`border px-2 py-1 text-[11px] font-medium leading-tight ${styles}`}>
+      {children}
+    </span>
   );
 }

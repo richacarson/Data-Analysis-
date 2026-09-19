@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export default function ConfirmPage() {
   return (
     <Suspense
-      fallback={<p className="px-1 py-20 text-center text-[13px] text-muted">Signing you in…</p>}
+      fallback={<p className="px-1 py-20 text-center text-[13px] text-t3">Signing you in…</p>}
     >
       <ConfirmSignIn />
     </Suspense>

@@ -12,14 +12,14 @@ export default async function LoginPage({
   return (
     <div className="mx-auto flex max-w-md flex-col justify-center py-20">
       <div className="panel px-6 py-7">
-        <h1 className="text-[20px] font-semibold tracking-tight">Sign in</h1>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
+        <h1 className="font-serif text-[22px] tracking-tight text-t1">Sign in</h1>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-t3">
           Equity Lens is private. Sign in with your password, or have a one-time code emailed
           to you.
         </p>
         <LoginForm next={next} />
       </div>
-      <p className="mt-4 px-1 text-[11px] leading-relaxed text-muted">
+      <p className="mt-4 px-1 text-[11px] leading-relaxed text-t3">
         Access is limited to approved addresses. Emailed links are unreliable behind corporate
         mail scanning, which opens them automatically and spends them before you click, so a
         password is the dependable option.

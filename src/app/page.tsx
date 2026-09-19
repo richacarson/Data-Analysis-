@@ -33,20 +33,24 @@ const CAPABILITIES = [
 export default function HomePage() {
   return (
     <div className="space-y-6">
-      <section className="panel px-6 py-8">
-        <h1 className="text-[26px] font-semibold tracking-tight">
-          Deep fundamental analysis, one ticker at a time.
+      <section className="panel px-6 py-9">
+        <p className="eyebrow">Paradiem · Family Capital</p>
+        <h1 className="mt-3 max-w-2xl font-serif text-[30px] leading-tight tracking-tight text-t1">
+          Excellent companies,{' '}
+          <span className="italic text-gold">owned with intention.</span>
         </h1>
-        <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-muted">
-          Search any listed company to get a full valuation workup — five independent models,
-          the assumptions behind each one, and the sensitivity around them.
+        <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-t3">
+          Search any listed company for a full valuation workup — five independent models, the
+          assumptions behind each one, and the sensitivity around them.
         </p>
-        <div className="mt-5 flex flex-wrap gap-2">
+        <div className="mt-6 h-px bg-gold/40" />
+        <p className="eyebrow-muted mt-5">Jump to</p>
+        <div className="mt-3 flex flex-wrap gap-2">
           {EXAMPLES.map((symbol) => (
             <Link
               key={symbol}
               href={`/stock/${symbol}`}
-              className="rounded-md border border-line bg-panel2 px-3 py-1.5 text-[13px] font-medium hover:border-accent hover:text-accent"
+              className="tabular border border-line bg-card px-3 py-1.5 text-[13px] font-medium text-t2 transition-colors hover:border-lineActive hover:text-gold"
             >
               {symbol}
             </Link>
@@ -59,8 +63,9 @@ export default function HomePage() {
       <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {CAPABILITIES.map((c) => (
           <div key={c.title} className="panel px-4 py-4">
-            <h2 className="text-[13px] font-semibold">{c.title}</h2>
-            <p className="mt-1.5 text-[12px] leading-relaxed text-muted">{c.body}</p>
+            <h2 className="font-serif text-[15px] leading-snug text-t1">{c.title}</h2>
+            <div className="my-2.5 h-px w-8 bg-gold/50" />
+            <p className="text-[12px] leading-relaxed text-t3">{c.body}</p>
           </div>
         ))}
       </section>

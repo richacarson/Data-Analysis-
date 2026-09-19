@@ -32,14 +32,14 @@ export function UserMenu() {
     <div className="flex shrink-0 items-center gap-3">
       <Link
         href="/account"
-        className="hidden text-[12px] text-muted hover:text-ink sm:inline"
+        className="hidden text-[12px] text-t3 hover:text-t1 sm:inline"
         title="Account settings"
       >
         {email}
       </Link>
       <button
         onClick={signOut}
-        className="rounded-md border border-line bg-panel2 px-2.5 py-1.5 text-[12px] font-medium hover:border-accent hover:text-accent"
+        className="border border-line bg-card px-2.5 py-1.5 text-[12px] font-medium hover:border-lineActive hover:text-gold"
       >
         Sign out
       </button>

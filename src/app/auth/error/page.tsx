@@ -18,13 +18,13 @@ export default async function AuthErrorPage({
   return (
     <div className="mx-auto max-w-md py-20">
       <div className="panel px-6 py-7">
-        <h1 className="text-[18px] font-semibold">Could not sign you in</h1>
-        <p className="mt-2 text-[13px] leading-relaxed text-muted">
+        <h1 className="font-serif text-[20px] text-t1">Could not sign you in</h1>
+        <p className="mt-2 text-[13px] leading-relaxed text-t3">
           {(reason && REASONS[reason]) ?? 'Something went wrong during sign-in.'}
         </p>
         <Link
           href="/login"
-          className="mt-5 inline-block rounded-md bg-accent px-3 py-2 text-[13px] font-medium text-white"
+          className="mt-5 inline-block bg-gold px-3 py-2 text-[13px] font-semibold text-bg"
         >
           Request a new link
         </Link>

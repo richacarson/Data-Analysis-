@@ -43,11 +43,11 @@ export function SetPassword() {
   if (state === 'done') {
     return (
       <div className="mt-5 space-y-3">
-        <div className="rounded-md border border-pos/40 bg-pos/10 px-3 py-3 text-[13px]">
+        <div className="border border-up/40 bg-up/10 px-3 py-3 text-[13px]">
           Password set. You can now sign in with your email and password, on any device, with no
           email round trip.
         </div>
-        <Link href="/" className="inline-block text-[13px] text-accent hover:underline">
+        <Link href="/" className="inline-block text-[13px] text-gold hover:underline">
           Back to Equity Lens
         </Link>
       </div>
@@ -65,7 +65,7 @@ export function SetPassword() {
         onChange={(e) => setPassword(e.target.value)}
         placeholder="New password"
         aria-label="New password"
-        className="w-full rounded-md border border-line bg-panel2 px-3 py-2 text-[13px] outline-none placeholder:text-muted focus:border-accent"
+        className="w-full border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-t3 focus:border-lineActive"
       />
       <input
         type="password"
@@ -75,16 +75,16 @@ export function SetPassword() {
         onChange={(e) => setConfirm(e.target.value)}
         placeholder="Confirm password"
         aria-label="Confirm password"
-        className="w-full rounded-md border border-line bg-panel2 px-3 py-2 text-[13px] outline-none placeholder:text-muted focus:border-accent"
+        className="w-full border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-t3 focus:border-lineActive"
       />
       <button
         type="submit"
         disabled={state === 'saving'}
-        className="w-full rounded-md bg-accent px-3 py-2 text-[13px] font-medium text-white disabled:opacity-60"
+        className="w-full bg-gold px-3 py-2 text-[13px] font-semibold text-bg disabled:opacity-60"
       >
         {state === 'saving' ? 'Saving…' : 'Set password'}
       </button>
-      {error && <p className="text-[12px] text-neg">{error}</p>}
+      {error && <p className="text-[12px] text-dn">{error}</p>}
     </form>
   );
 }
