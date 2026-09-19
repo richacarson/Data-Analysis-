@@ -14,14 +14,14 @@ export default async function LoginPage({
       <div className="panel px-6 py-7">
         <h1 className="text-[20px] font-semibold tracking-tight">Sign in</h1>
         <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
-          Equity Lens is private. Enter your email and we&apos;ll send a sign-in link — no
+          Equity Lens is private. Enter your email and we&apos;ll send a six-digit code — no
           password to remember.
         </p>
         <LoginForm next={next} />
       </div>
       <p className="mt-4 px-1 text-[11px] leading-relaxed text-muted">
-        Access is limited to approved addresses. If your link doesn&apos;t arrive, check that
-        your email is on the allowlist for this project.
+        Access is limited to approved addresses. The email also contains a link, but if your
+        mail provider scans links it may consume it before you click — type the code instead.
       </p>
     </div>
   );

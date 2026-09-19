@@ -1,24 +1,38 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
+type Stage = 'email' | 'sending' | 'code' | 'verifying';
+
+/**
+ * Email sign-in with a typed code rather than a clicked link.
+ *
+ * Corporate mail security (Microsoft Safe Links and similar) fetches every URL
+ * in an incoming message to scan it. Magic links are single-use, so that scan
+ * consumes the link and the recipient's own click then fails as "already used".
+ * A six-digit code cannot be spent by something fetching a URL, so it is the
+ * only reliable option behind a scanner. The emailed link still works where it
+ * is not being scanned.
+ */
 export function LoginForm({ next }: { next?: string }) {
+  const router = useRouter();
   const [supabase] = useState(() => createClient());
   const [email, setEmail] = useState('');
-  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
-  const [message, setMessage] = useState('');
+  const [code, setCode] = useState('');
+  const [stage, setStage] = useState<Stage>('email');
+  const [error, setError] = useState('');
 
-  async function onSubmit(e: React.FormEvent) {
+  async function sendCode(e: React.FormEvent) {
     e.preventDefault();
     if (!supabase) {
-      setState('error');
-      setMessage('Authentication is not configured for this deployment.');
+      setError('Authentication is not configured for this deployment.');
       return;
     }
+    setError('');
+    setStage('sending');
 
-    setState('sending');
-    // Carry the originally requested page through the email round trip.
     const callback = new URL('/auth/confirm', window.location.origin);
     if (next) callback.searchParams.set('next', next);
 
@@ -28,24 +42,78 @@ export function LoginForm({ next }: { next?: string }) {
     });
 
     if (error) {
-      setState('error');
-      setMessage(error.message);
+      setError(error.message);
+      setStage('email');
       return;
     }
-    setState('sent');
-    setMessage(`Check ${email} for your sign-in link.`);
+    setStage('code');
   }
 
-  if (state === 'sent') {
+  async function verifyCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (!supabase) return;
+    setError('');
+    setStage('verifying');
+
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token: code.trim(),
+      type: 'email',
+    });
+
+    if (error) {
+      setError(error.message);
+      setStage('code');
+      return;
+    }
+
+    const destination = next && next.startsWith('/') && !next.startsWith('//') ? next : '/';
+    router.replace(destination);
+    router.refresh();
+  }
+
+  if (stage === 'code' || stage === 'verifying') {
     return (
-      <div className="mt-5 rounded-md border border-pos/40 bg-pos/10 px-3 py-3 text-[13px]">
-        {message}
-      </div>
+      <form onSubmit={verifyCode} className="mt-5 space-y-3">
+        <p className="text-[13px] leading-relaxed text-muted">
+          We sent a six-digit code to <span className="text-ink">{email}</span>. Enter it below.
+        </p>
+        <input
+          required
+          autoFocus
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          placeholder="123456"
+          aria-label="Six-digit sign-in code"
+          className="tabular w-full rounded-md border border-line bg-panel2 px-3 py-2 text-center text-[18px] tracking-[0.3em] outline-none placeholder:tracking-normal placeholder:text-muted focus:border-accent"
+        />
+        <button
+          type="submit"
+          disabled={stage === 'verifying'}
+          className="w-full rounded-md bg-accent px-3 py-2 text-[13px] font-medium text-white disabled:opacity-60"
+        >
+          {stage === 'verifying' ? 'Signing in…' : 'Sign in'}
+        </button>
+        {error && <p className="text-[12px] text-neg">{error}</p>}
+        <button
+          type="button"
+          onClick={() => {
+            setCode('');
+            setError('');
+            setStage('email');
+          }}
+          className="w-full text-[12px] text-muted hover:text-ink"
+        >
+          Use a different email
+        </button>
+      </form>
     );
   }
 
   return (
-    <form onSubmit={onSubmit} className="mt-5 space-y-3">
+    <form onSubmit={sendCode} className="mt-5 space-y-3">
       <input
         type="email"
         required
@@ -58,12 +126,12 @@ export function LoginForm({ next }: { next?: string }) {
       />
       <button
         type="submit"
-        disabled={state === 'sending'}
+        disabled={stage === 'sending'}
         className="w-full rounded-md bg-accent px-3 py-2 text-[13px] font-medium text-white disabled:opacity-60"
       >
-        {state === 'sending' ? 'Sending…' : 'Email me a sign-in link'}
+        {stage === 'sending' ? 'Sending…' : 'Email me a code'}
       </button>
-      {state === 'error' && <p className="text-[12px] text-neg">{message}</p>}
+      {error && <p className="text-[12px] text-neg">{error}</p>}
     </form>
   );
 }
