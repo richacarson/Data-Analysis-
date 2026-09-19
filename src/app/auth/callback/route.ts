@@ -15,7 +15,11 @@ export async function GET(request: Request) {
   const destination = next && next.startsWith('/') && !next.startsWith('//') ? next : '/';
 
   if (!code) {
-    return NextResponse.redirect(`${origin}/auth/error?reason=missing-code`);
+    // The session may be in the URL fragment, which the server never receives.
+    // Only the browser can read it, so let the client handler try.
+    const forward = new URL('/auth/confirm', origin);
+    if (next) forward.searchParams.set('next', next);
+    return NextResponse.redirect(forward);
   }
 
   const supabase = await createClient();

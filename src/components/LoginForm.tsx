@@ -19,7 +19,7 @@ export function LoginForm({ next }: { next?: string }) {
 
     setState('sending');
     // Carry the originally requested page through the email round trip.
-    const callback = new URL('/auth/callback', window.location.origin);
+    const callback = new URL('/auth/confirm', window.location.origin);
     if (next) callback.searchParams.set('next', next);
 
     const { error } = await supabase.auth.signInWithOtp({
