@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
@@ -29,7 +30,13 @@ export function UserMenu() {
 
   return (
     <div className="flex shrink-0 items-center gap-3">
-      <span className="hidden text-[12px] text-muted sm:inline">{email}</span>
+      <Link
+        href="/account"
+        className="hidden text-[12px] text-muted hover:text-ink sm:inline"
+        title="Account settings"
+      >
+        {email}
+      </Link>
       <button
         onClick={signOut}
         className="rounded-md border border-line bg-panel2 px-2.5 py-1.5 text-[12px] font-medium hover:border-accent hover:text-accent"

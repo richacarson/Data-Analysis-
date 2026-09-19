@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
-type Stage = 'email' | 'sending' | 'code' | 'verifying';
+type Stage = 'password' | 'signing-in' | 'email' | 'sending' | 'code' | 'verifying';
 
 /**
  * Email sign-in with a typed code rather than a clicked link.
@@ -21,8 +21,30 @@ export function LoginForm({ next }: { next?: string }) {
   const [supabase] = useState(() => createClient());
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
-  const [stage, setStage] = useState<Stage>('email');
+  const [password, setPassword] = useState('');
+  const [stage, setStage] = useState<Stage>('password');
   const [error, setError] = useState('');
+
+  const destination = next && next.startsWith('/') && !next.startsWith('//') ? next : '/';
+
+  async function signInWithPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!supabase) {
+      setError('Authentication is not configured for this deployment.');
+      return;
+    }
+    setError('');
+    setStage('signing-in');
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setError(error.message);
+      setStage('password');
+      return;
+    }
+    router.replace(destination);
+    router.refresh();
+  }
 
   async function sendCode(e: React.FormEvent) {
     e.preventDefault();
@@ -67,9 +89,54 @@ export function LoginForm({ next }: { next?: string }) {
       return;
     }
 
-    const destination = next && next.startsWith('/') && !next.startsWith('//') ? next : '/';
     router.replace(destination);
     router.refresh();
+  }
+
+  if (stage === 'password' || stage === 'signing-in') {
+    return (
+      <form onSubmit={signInWithPassword} className="mt-5 space-y-3">
+        <input
+          type="email"
+          required
+          autoFocus
+          autoComplete="username"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          aria-label="Email address"
+          className="w-full rounded-md border border-line bg-panel2 px-3 py-2 text-[13px] outline-none placeholder:text-muted focus:border-accent"
+        />
+        <input
+          type="password"
+          required
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
+          aria-label="Password"
+          className="w-full rounded-md border border-line bg-panel2 px-3 py-2 text-[13px] outline-none placeholder:text-muted focus:border-accent"
+        />
+        <button
+          type="submit"
+          disabled={stage === 'signing-in'}
+          className="w-full rounded-md bg-accent px-3 py-2 text-[13px] font-medium text-white disabled:opacity-60"
+        >
+          {stage === 'signing-in' ? 'Signing in…' : 'Sign in'}
+        </button>
+        {error && <p className="text-[12px] text-neg">{error}</p>}
+        <button
+          type="button"
+          onClick={() => {
+            setError('');
+            setStage('email');
+          }}
+          className="w-full text-[12px] text-muted hover:text-ink"
+        >
+          No password yet? Email me a code instead
+        </button>
+      </form>
+    );
   }
 
   if (stage === 'code' || stage === 'verifying') {
@@ -102,11 +169,11 @@ export function LoginForm({ next }: { next?: string }) {
           onClick={() => {
             setCode('');
             setError('');
-            setStage('email');
+            setStage('password');
           }}
           className="w-full text-[12px] text-muted hover:text-ink"
         >
-          Use a different email
+          Back to password sign-in
         </button>
       </form>
     );
