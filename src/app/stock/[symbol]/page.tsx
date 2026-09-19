@@ -34,11 +34,11 @@ export default async function StockPage({
           {error instanceof Error ? error.message : 'Unknown error'}
         </p>
         <p className="mt-4 text-[13px] text-muted">
-          Check that <code className="text-ink">FMP_API_KEY</code> is set, then visit{' '}
+          Visit{' '}
           <Link href="/api/health" className="text-accent underline">
             /api/health
           </Link>{' '}
-          to see which endpoints are responding.
+          to see which data feeds are responding.
         </p>
       </div>
     );

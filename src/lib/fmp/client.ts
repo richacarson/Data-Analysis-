@@ -28,11 +28,13 @@ function apiKey(): string {
   // is accepted as an alias so a local .env.local using either name works.
   const key = process.env.FMP_KEY || process.env.FMP_API_KEY;
   if (!key) {
-    throw new FmpError(
-      'FMP_KEY is not set. Copy .env.example to .env.local and add your key.',
-      500,
-      '(config)',
-    );
+    // The right remedy differs by environment, and pointing someone at a local
+    // .env file while they are looking at a deployed site is just misleading.
+    const remedy =
+      process.env.VERCEL === '1'
+        ? 'Add FMP_KEY in the Vercel project settings (Settings → Environment Variables), applied to Production, then redeploy.'
+        : 'Copy .env.example to .env.local and add your key.';
+    throw new FmpError(`FMP_KEY is not set. ${remedy}`, 500, '(config)');
   }
   return key;
 }
