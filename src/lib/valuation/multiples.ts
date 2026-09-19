@@ -1,6 +1,17 @@
 import { clamp } from './wacc';
 
 /**
+ * A PEG that came from somewhere else, passed through only if it means
+ * anything. A negative PEG — from negative earnings or negative growth — reads
+ * on a page as "extremely cheap" when it is in fact undefined.
+ */
+export function usablePeg(value: number | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return value;
+}
+
+/**
  * Price/earnings-to-growth. Below 1.0 is the classic Lynch screen for a stock
  * growing faster than it is priced.
  *

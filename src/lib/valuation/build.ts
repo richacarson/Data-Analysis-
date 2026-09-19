@@ -22,10 +22,12 @@ import {
   ownerEarnings,
   peg,
   shareholderYields,
+  usablePeg,
   valueOnMultiple,
   type MultipleValuation,
 } from './multiples';
 import { reverseDcf } from './reverse-dcf';
+import { cashFlowModelsApply, isFinancialSector } from './applicability';
 import { clamp, impliedCostOfDebt, wacc } from './wacc';
 
 /** Long-run US equity risk premium. Overridable per valuation. */
@@ -163,8 +165,26 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
 
   const seedGrowth = clamp(forwardEpsCagr ?? historicalFcfCagr ?? 0.05, -0.1, 0.35);
 
-  // ---- Model 1: FCF discounted cash flow ----------------------------------
+  // ---- Which models this business can actually support --------------------
+  /*
+   * A discounted cash flow is meaningless for a lender. Banks and insurers
+   * report no meaningful capital expenditure, and their operating cash flow is
+   * dominated by changes in the loan book and deposit base — JPMorgan's swings
+   * between +$107bn and -$148bn on a stable, profitable business. Running a DCF
+   * on that produces a confident number with no relationship to the company.
+   */
+  const isFinancial = isFinancialSector(profile.sector, profile.industry);
+
   const baseFcf = latestFcf?.freeCashFlow ?? 0;
+  const fcfVerdict = cashFlowModelsApply(profile.sector, profile.industry, baseFcf);
+  const fcfModelApplies = fcfVerdict.applies;
+
+  const modelNotes: Array<{ label: string; reason: string }> = [];
+  if (fcfVerdict.reason) {
+    modelNotes.push({ label: 'Cash flow models', reason: fcfVerdict.reason });
+  }
+
+  // ---- Model 1: FCF discounted cash flow ----------------------------------
   const dcfAssumptions: DcfAssumptions = {
     years: forecastYears,
     discountRate,
@@ -200,6 +220,9 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
 
   // ---- Model 3: reverse DCF ------------------------------------------------
   const reverse = reverseDcf(baseFcf, dcfAssumptions, bridge, price);
+  // Bisection reports non-convergence by returning the bound it gave up at.
+  // Presenting that as "the market expects 150% growth" would be a fabrication.
+  const reverseUsable = fcfModelApplies && reverse.converged;
 
   // ---- Model 4: earnings power value (no-growth floor) --------------------
   const epv = earningsPowerValue({
@@ -249,12 +272,25 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
   });
 
   // ---- Consensus of models -------------------------------------------------
-  const candidates = [
-    { label: 'FCF DCF', value: fcfDcf.fairValuePerShare },
-    { label: 'Earnings DCF', value: epsDcf.fairValuePerShare },
-    { label: 'Earnings power', value: epvPerShare },
-    { label: 'Graham number', value: grahamNumber(eps, bookPerShare) ?? 0 },
-  ].filter((c) => Number.isFinite(c.value) && c.value > 0);
+  const allCandidates = [
+    { label: 'FCF DCF', value: fcfDcf.fairValuePerShare, applies: fcfModelApplies },
+    { label: 'Earnings DCF', value: epsDcf.fairValuePerShare, applies: true },
+    { label: 'Earnings power', value: epvPerShare, applies: true },
+    { label: 'Graham number', value: grahamNumber(eps, bookPerShare) ?? 0, applies: true },
+  ];
+
+  for (const c of allCandidates) {
+    if (c.applies && !(Number.isFinite(c.value) && c.value > 0)) {
+      modelNotes.push({
+        label: c.label,
+        reason: 'Excluded: the model returns a negative or undefined value for this company.',
+      });
+    }
+  }
+
+  const candidates = allCandidates
+    .filter((c) => c.applies && Number.isFinite(c.value) && c.value > 0)
+    .map(({ label, value }) => ({ label, value }));
 
   const blendedFairValue = candidates.length
     ? candidates.reduce((s, c) => s + c.value, 0) / candidates.length
@@ -308,13 +344,15 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     blendedFairValue,
     upside: price > 0 ? blendedFairValue / price - 1 : 0,
     modelSpread: candidates,
+    modelNotes,
+    applicability: { isFinancial, fcfModelApplies, reverseUsable },
     sensitivity: grid,
 
     growthAdjusted: {
       pegTrailing: trailingPeg,
       pegForward: fwdPeg,
-      pegFromApi: ratios?.priceToEarningsGrowthRatioTTM ?? null,
-      forwardPegFromApi: ratios?.forwardPriceToEarningsGrowthRatioTTM ?? null,
+      pegFromApi: usablePeg(ratios?.priceToEarningsGrowthRatioTTM),
+      forwardPegFromApi: usablePeg(ratios?.forwardPriceToEarningsGrowthRatioTTM),
     },
 
     quality: {

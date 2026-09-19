@@ -45,6 +45,7 @@ export default async function StockPage({
   }
 
   const { profile, models, quality, growth, costOfCapital, growthAdjusted, consensus } = report;
+  const { fcfModelApplies, reverseUsable } = report.applicability;
   const currency = profile.currency || 'USD';
   const undervalued = report.upside > 0;
 
@@ -69,6 +70,20 @@ export default async function StockPage({
 
   return (
     <div className="space-y-4">
+      {/* Silently averaging whatever survived would misrepresent the result. */}
+      {report.modelNotes.length > 0 && (
+        <div className="border border-line bg-surface px-4 py-3">
+          <p className="eyebrow-muted">Models not included</p>
+          <ul className="mt-2 space-y-1">
+            {report.modelNotes.map((n) => (
+              <li key={n.label} className="text-[12px] leading-relaxed text-t3">
+                <span className="font-medium text-t2">{n.label}</span> — {n.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* A feed that failed is called out rather than being rendered as a zero. */}
       {report.dataIssues.length > 0 && (
         <div className="border border-dn/40 bg-dn/10 px-4 py-3 text-[12px]">
@@ -133,8 +148,14 @@ export default async function StockPage({
       <div className="panel grid grid-cols-2 divide-x divide-line md:grid-cols-5">
         <Stat
           label="Blended fair value"
-          value={money(report.blendedFairValue, currency)}
-          sub={`${report.modelSpread.length} models averaged`}
+          value={report.modelSpread.length ? money(report.blendedFairValue, currency) : '—'}
+          sub={
+            report.modelSpread.length
+              ? `${report.modelSpread.length} of 4 models: ${report.modelSpread
+                  .map((m) => m.label)
+                  .join(', ')}`
+              : 'No model applies to this company'
+          }
         />
         <Stat
           label="Upside to fair value"
@@ -144,8 +165,8 @@ export default async function StockPage({
         />
         <Stat
           label="Market-implied growth"
-          value={pct(models.reverseDcf.impliedCagr)}
-          sub="What today's price already pays for"
+          value={reverseUsable ? pct(models.reverseDcf.impliedCagr) : '—'}
+          sub={reverseUsable ? "What today's price already pays for" : 'Not meaningful here'}
         />
         <Stat
           label="Discount rate (WACC)"
@@ -194,20 +215,31 @@ export default async function StockPage({
         <Panel eyebrow="What is priced in"
           title="Reverse DCF" subtitle="What is priced in?">
           <div className="border-b border-line px-4 py-4">
-            <p className="pullquote">
-              To justify {money(report.price, currency)} today, free cash flow must compound at
-              roughly{' '}
-              <span className="not-italic font-semibold text-gold">
-                {pct(models.reverseDcf.impliedCagr)}
-              </span>{' '}
-              a year for {models.fcfDcf.assumptions.years} years.
-            </p>
+            {reverseUsable ? (
+              <p className="pullquote">
+                To justify {money(report.price, currency)} today, free cash flow must compound at
+                roughly{' '}
+                <span className="not-italic font-semibold text-gold">
+                  {pct(models.reverseDcf.impliedCagr)}
+                </span>{' '}
+                a year for {models.fcfDcf.assumptions.years} years.
+              </p>
+            ) : (
+              <p className="text-[12px] leading-relaxed text-t3">
+                Not meaningful for this company. A reverse DCF solves for the growth rate implied
+                by today&apos;s price, which requires a positive, representative free cash flow to
+                grow from.
+              </p>
+            )}
           </div>
           <Row
             label="Implied year-1 growth"
-            value={pct(models.reverseDcf.impliedInitialGrowth)}
+            value={reverseUsable ? pct(models.reverseDcf.impliedInitialGrowth) : '—'}
           />
-          <Row label="Implied CAGR" value={pct(models.reverseDcf.impliedCagr)} />
+          <Row
+            label="Implied CAGR"
+            value={reverseUsable ? pct(models.reverseDcf.impliedCagr) : '—'}
+          />
           <Row
             label="Analyst forward EPS CAGR"
             value={pct(growth.forwardEpsCagr)}
@@ -218,7 +250,7 @@ export default async function StockPage({
             value={pct(growth.historicalFcfCagr)}
           />
           <div className="px-4 py-3">
-            {growth.forwardEpsCagr !== null && (
+            {reverseUsable && growth.forwardEpsCagr !== null && (
               <Badge tone={growth.forwardEpsCagr >= models.reverseDcf.impliedCagr ? 'pos' : 'neg'}>
                 {growth.forwardEpsCagr >= models.reverseDcf.impliedCagr
                   ? 'Analysts expect more growth than the price requires'
@@ -264,8 +296,16 @@ export default async function StockPage({
             models.fcfDcf.assumptions.terminalGrowth,
           )}`}
         >
-          <CashFlowChart data={models.fcfDcf.years} />
-          <div className="border-t border-line">
+          {fcfModelApplies ? (
+            <CashFlowChart data={models.fcfDcf.years} />
+          ) : (
+            <p className="border-b border-line px-4 py-6 text-[12px] leading-relaxed text-t3">
+              Not shown for this company. {report.applicability.isFinancial
+                ? 'For lenders and insurers, reported free cash flow tracks the loan book and deposit base rather than the economics of the business.'
+                : 'Trailing free cash flow is negative, so compounding it forward only produces a larger negative number.'}
+            </p>
+          )}
+          <div className={fcfModelApplies ? 'border-t border-line' : ''}>
             <Row label="Base free cash flow" value={bigMoney(models.fcfDcf.baseCashFlow, currency)} />
             <Row label="PV of forecast" value={bigMoney(models.fcfDcf.pvOfForecast, currency)} />
             <Row label="PV of terminal value" value={bigMoney(models.fcfDcf.pvOfTerminalValue, currency)} />
