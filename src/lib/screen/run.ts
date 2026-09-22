@@ -75,7 +75,7 @@ export async function runScreen(
 
   const targetFiscalYear = new Date().getFullYear() + horizonYears;
 
-  return pooled(symbols, 8, async (symbol): Promise<ScreenRow> => {
+  return pooled(symbols, 12, async (symbol): Promise<ScreenRow> => {
     const base: ScreenRow = {
       symbol,
       price: prices.get(symbol) ?? null,

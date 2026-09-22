@@ -8,6 +8,14 @@ import { ScreenTable } from '@/components/ScreenTable';
 // A full sleeve is a few hundred API calls; an hour of cache keeps it usable.
 export const revalidate = 3600;
 
+/*
+ * The 154-holding screen is roughly 460 requests. At the concurrency below that
+ * is well inside a minute, but comfortably past the default serverless ceiling,
+ * so the limit is raised explicitly rather than left to time out on a cold
+ * cache.
+ */
+export const maxDuration = 60;
+
 export const metadata = { title: 'Screen — Equity Lens' };
 
 export default async function ScreenPage({
