@@ -88,3 +88,24 @@ describe('splitCapex', () => {
     expect(latestCapexSplit([])).toBeNull();
   });
 });
+
+describe('which capex method is actually used', () => {
+  it('names depreciation when it gives the lower owner cash flow', () => {
+    // Celestica's case: capital spending runs close to the sales it has already
+    // supported, so the sales-based split books little to maintenance and reads
+    // higher than depreciation does.
+    const closeToSales: CapexYear[] = [
+      { date: '2024-12-31', revenue: 9646e6, capitalExpenditure: -180e6, depreciationAndAmortization: 152e6, operatingCashFlow: 640e6, propertyPlantEquipmentNet: 900e6 },
+      { date: '2025-12-31', revenue: 12391e6, capitalExpenditure: -200e6, depreciationAndAmortization: 176e6, operatingCashFlow: 658e6, propertyPlantEquipmentNet: 1100e6 },
+    ];
+    const last = latestCapexSplit(closeToSales)!;
+    expect(last.ownerFreeCashFlow).toBeGreaterThan(last.ownerFreeCashFlowFromDepreciation);
+    expect(last.conservativeMethod).toBe('depreciation');
+    expect(last.conservativeOwnerFreeCashFlow).toBe(last.ownerFreeCashFlowFromDepreciation);
+  });
+
+  it('names the sales-based split when that one is lower', () => {
+    const last = latestCapexSplit(msft)!;
+    expect(last.conservativeMethod).toBe('greenwald');
+  });
+});

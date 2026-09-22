@@ -45,6 +45,8 @@ export interface CapexSplit {
   method: 'greenwald' | 'depreciation';
   /** True where the two estimates are more than a quarter apart. */
   methodsDisagree: boolean;
+  /** Which method produced the lower, and therefore used, owner cash flow. */
+  conservativeMethod: 'greenwald' | 'depreciation';
 }
 
 /** Fixed assets required per dollar of sales, averaged to smooth one-off years. */
@@ -111,6 +113,8 @@ export function splitCapex(years: CapexYear[]): CapexSplit[] {
       reportedFreeCashFlow: year.operatingCashFlow - totalCapex,
       method,
       methodsDisagree: spread / scale > 0.25,
+      conservativeMethod:
+        ownerFreeCashFlow <= ownerFreeCashFlowFromDepreciation ? 'greenwald' : 'depreciation',
     };
   });
 }

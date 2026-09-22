@@ -38,8 +38,30 @@ export function ExpectedReturnPanel({
     <Panel
       eyebrow="Expected return"
       title={`${expected.horizonYears}-year total return`}
-      subtitle={`FY${expected.horizonFiscalYear} consensus · ${expected.analystCount} analysts`}
+      subtitle={`FY${expected.horizonFiscalYear} consensus · ${expected.analystCount} ${
+        expected.analystCount === 1 ? 'analyst' : 'analysts'
+      }`}
     >
+      {expected.analystCount > 0 && expected.analystCount < 3 && (
+        <div className="border-b border-line bg-dn/[0.08] px-4 py-3">
+          <Badge tone="neg">
+            {expected.analystCount === 1 ? 'One analyst' : `${expected.analystCount} analysts`}{' '}
+            covers FY{expected.horizonFiscalYear}
+          </Badge>
+          <p className="mt-2 text-[12px] leading-relaxed text-t3">
+            Every figure in this panel rests on that estimate. Coverage thins sharply a few years
+            out, and a single forecast is one person&apos;s model, not a consensus.
+          </p>
+        </div>
+      )}
+      {expected.anchorsDisagree && (
+        <div className="border-b border-line bg-warn/[0.08] px-4 py-3">
+          <Badge tone="flat">
+            Exit multiple anchors disagree by {expected.anchorSpread?.toFixed(1)}×
+          </Badge>
+          <p className="mt-2 text-[12px] leading-relaxed text-t3">{expected.disagreementNote}</p>
+        </div>
+      )}
       <div className="grid grid-cols-2 divide-x divide-line border-b border-line md:grid-cols-4">
         <Stat
           label="Expected CAGR"
@@ -78,7 +100,8 @@ export function ExpectedReturnPanel({
       <div className="px-4 py-3">
         <p className="eyebrow-muted">Exit multiple anchors</p>
         <p className="mt-1.5 text-[11px] text-t4">
-          Using {expected.exitPeSource ?? 'none'} — the most conservative available.
+          Using {expected.exitPeSource ?? 'none'}. The median survives one anchor being wrong in
+          either direction; the minimum would let a stale one decide the answer.
         </p>
       </div>
       {anchors.map((a) => (

@@ -184,21 +184,46 @@ describe('exitMultipleAnchors', () => {
     expect(five).toBeCloseTo(35.03, 1);
   });
 
-  it('defaults to the most conservative anchor available', () => {
+  it('defaults to the median so one anchor cannot decide the answer', () => {
     const a = exitMultipleAnchors({ ownHistory: msft, industryPe: 52.1, justified: 22 });
-    expect(a.recommended).toBe(22);
-    expect(a.recommendedSource).toBe('Justified by ROIC');
+    // Anchors: own 10y 34.2, own 5y 35.03, industry 52.1, justified 22.
+    expect(a.recommended).toBeCloseTo(34.6, 0);
+    expect(a.recommendedSource).toMatch(/Median of 4/);
+  });
+
+  it('does not let a stale history anchor the whole valuation', () => {
+    // Celestica: 14x as a low-margin contract manufacturer, while its industry
+    // and its current returns on capital both justify about 33x. Taking the
+    // minimum handed the answer to a business that no longer exists.
+    const cls = exitMultipleAnchors({
+      ownHistory: [14.35, 14.35, 14.44, 14.6, 14.2, 15.1, 13.9, 14.44, 14.5, 14.3],
+      industryPe: 34.65,
+      industryMedian: 32.77,
+      justified: 32.64,
+    });
+    expect(cls.recommended!).toBeGreaterThan(20);
+    expect(cls.anchorsDisagree).toBe(true);
+    expect(cls.spread!).toBeGreaterThan(2);
+    expect(cls.disagreementNote).toMatch(/business has changed/);
+  });
+
+  it('stays quiet when the anchors agree', () => {
+    const a = exitMultipleAnchors({ ownHistory: [20, 21, 22], industryPe: 24, justified: 19 });
+    expect(a.anchorsDisagree).toBe(false);
+    expect(a.disagreementNote).toBeNull();
   });
 
   it('still produces a default when only one anchor exists', () => {
     const a = exitMultipleAnchors({ ownHistory: [], industryPe: 52.1 });
     expect(a.recommended).toBe(52.1);
+    expect(a.anchorsDisagree).toBe(false);
   });
 
   it('reports no default when nothing is usable', () => {
     const a = exitMultipleAnchors({ ownHistory: [null, -3, 0] });
     expect(a.recommended).toBeNull();
     expect(a.recommendedSource).toBeNull();
+    expect(a.spread).toBeNull();
   });
 });
 

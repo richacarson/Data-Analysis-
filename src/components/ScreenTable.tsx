@@ -112,6 +112,18 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
                       <>
                         {num(r.epsAtHorizon)}
                         <span className="ml-1 text-[10px] text-t4">FY{r.horizonFiscalYear}</span>
+                        {/* Thin coverage undermines everything downstream of it,
+                            and is invisible once a row is just a number. */}
+                        {r.analystCount > 0 && r.analystCount < 3 && (
+                          <span
+                            className="ml-1.5 text-[10px] text-dn"
+                            title={`Only ${r.analystCount} analyst${
+                              r.analystCount === 1 ? '' : 's'
+                            } covers this year`}
+                          >
+                            ({r.analystCount})
+                          </span>
+                        )}
                       </>
                     ) : (
                       '—'

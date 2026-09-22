@@ -16,9 +16,14 @@ export interface MultipleAnchor {
 
 export interface ExitMultipleAnchors {
   anchors: MultipleAnchor[];
-  /** The most conservative anchor available, used as the default. */
+  /** Median of the available anchors, used as the default. */
   recommended: number | null;
   recommendedSource: string | null;
+  /** Highest anchor divided by lowest. Above 2 means they tell different stories. */
+  spread: number | null;
+  /** Set where the anchors disagree enough that the default is doing real work. */
+  anchorsDisagree: boolean;
+  disagreementNote: string | null;
 }
 
 /** Median of a list, ignoring values that cannot be a multiple. */
@@ -52,9 +57,17 @@ export interface AnchorInputs {
 /**
  * Assembles the anchors and picks a default.
  *
- * The default is deliberately the lowest available. An exit multiple is the
- * assumption most likely to flatter a thesis, so the tool should not be the
- * one arguing for a higher number.
+ * The default is the median rather than the lowest. Taking the minimum sounds
+ * conservative but lets a single stale anchor decide the answer: Celestica has
+ * traded at 14x as a low-margin contract manufacturer while its industry, and
+ * the multiple its current returns on capital justify, both sit near 33x. Its
+ * own history is a different company, and the minimum rule handed that history
+ * the entire valuation.
+ *
+ * The median survives one anchor being wrong in either direction. Where the
+ * anchors disagree by more than a factor of two the spread is reported, since
+ * that is the signal that the business or its rating has changed and the choice
+ * of multiple deserves a human.
  */
 export function exitMultipleAnchors(input: AnchorInputs): ExitMultipleAnchors {
   const tenYear = median(input.ownHistory.slice(0, 10));
@@ -95,9 +108,30 @@ export function exitMultipleAnchors(input: AnchorInputs): ExitMultipleAnchors {
     (a): a is MultipleAnchor & { value: number } => a.value !== null && a.value > 0,
   );
   if (!usable.length) {
-    return { anchors, recommended: null, recommendedSource: null };
+    return {
+      anchors,
+      recommended: null,
+      recommendedSource: null,
+      spread: null,
+      anchorsDisagree: false,
+      disagreementNote: null,
+    };
   }
 
-  const lowest = usable.reduce((min, a) => (a.value < min.value ? a : min));
-  return { anchors, recommended: lowest.value, recommendedSource: lowest.label };
+  const values = usable.map((a) => a.value);
+  const lowest = Math.min(...values);
+  const highest = Math.max(...values);
+  const spread = lowest > 0 ? highest / lowest : null;
+  const anchorsDisagree = spread !== null && spread > 2;
+
+  return {
+    anchors,
+    recommended: median(values),
+    recommendedSource: `Median of ${usable.length} anchors`,
+    spread,
+    anchorsDisagree,
+    disagreementNote: anchorsDisagree
+      ? `The anchors range from ${lowest.toFixed(1)}x to ${highest.toFixed(1)}x. That usually means the business has changed and its own history no longer describes it, or the sector is trading at an extreme. Worth setting this by hand.`
+      : null,
+  };
 }

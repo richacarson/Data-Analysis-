@@ -437,8 +437,9 @@ export default async function StockPage({
           />
           <div className="px-4 py-3">
             <Badge tone="flat">
-              Building ahead of revenue makes the sales-based method overstate maintenance; the
-              lower of the two is used elsewhere.
+              {report.capexSplit.conservativeMethod === 'greenwald'
+                ? 'The sales-based split gives the lower figure here, and that is the one used elsewhere.'
+                : 'Depreciation gives the lower figure here, and that is the one used elsewhere. The sales-based method reads higher because capital spending is running close to the sales it has already supported.'}
             </Badge>
           </div>
         </Panel>

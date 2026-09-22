@@ -20,6 +20,8 @@ export interface ScreenRow {
   /** How far the required multiple sits above the anchor — the stretch. */
   stretch: number | null;
   clearsHurdle: boolean | null;
+  /** Anchors more than a factor of two apart; the chosen multiple is doing real work. */
+  anchorsDisagree: boolean;
   note?: string;
 }
 
@@ -90,6 +92,7 @@ export async function runScreen(
       requiredExitPe: null,
       stretch: null,
       clearsHurdle: null,
+      anchorsDisagree: false,
     };
 
     try {
@@ -144,6 +147,7 @@ export async function runScreen(
         exitPe,
         exitPeSource: anchors.recommendedSource,
         ownMedianPe: anchors.anchors.find((a) => a.label === 'Own 10-year median')?.value ?? null,
+        anchorsDisagree: anchors.anchorsDisagree,
         expectedCagr: result?.totalCagr ?? null,
         requiredExitPe: required,
         // Above zero means the price needs a re-rating beyond what the company
