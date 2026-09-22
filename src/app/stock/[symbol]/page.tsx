@@ -3,6 +3,7 @@ import { buildValuation } from '@/lib/valuation/build';
 import { Badge, Panel, RangeBar, Row, Stat } from '@/components/ui';
 import { CashFlowChart, EpsProjectionChart, HistoryChart, ModelSpreadChart } from '@/components/Charts';
 import { SensitivityTable } from '@/components/SensitivityTable';
+import { ExpectedReturnPanel } from '@/components/ExpectedReturn';
 import {
   bigMoney,
   coverage,
@@ -157,6 +158,21 @@ export default async function StockPage({
       {/* ---- Verdict strip ---- */}
       <div className="panel grid grid-cols-2 divide-x divide-line md:grid-cols-5">
         <Stat
+          label={`Expected ${report.expectedReturn.horizonYears}y CAGR`}
+          value={report.expectedReturn.result ? pct(report.expectedReturn.result.totalCagr) : '—'}
+          tone={
+            report.expectedReturn.result
+              ? report.expectedReturn.result.totalCagr - report.expectedReturn.hurdle
+              : undefined
+          }
+          sub={`Against a ${pct(report.expectedReturn.hurdle, 0)} hurdle`}
+        />
+        <Stat
+          label="Must believe"
+          value={multiple(report.expectedReturn.requiredExitMultiple)}
+          sub={`Exit multiple for ${pct(report.expectedReturn.hurdle, 0)}`}
+        />
+        <Stat
           label="Blended fair value"
           value={report.modelSpread.length ? money(report.blendedFairValue, currency) : '—'}
           sub={
@@ -174,22 +190,18 @@ export default async function StockPage({
           sub={undervalued ? 'Trading below models' : 'Trading above models'}
         />
         <Stat
-          label="Market-implied growth"
-          value={reverseUsable ? pct(models.reverseDcf.impliedCagr) : '—'}
-          sub={reverseUsable ? "What today's price already pays for" : 'Not meaningful here'}
-        />
-        <Stat
-          label="Discount rate (WACC)"
-          value={pct(costOfCapital.discountRateUsed)}
-          sub={`Beta ${num(profile.beta)} · Rf ${pct(costOfCapital.riskFreeRate)}`}
-        />
-        <Stat
           label="ROIC less WACC"
           value={pct(quality.economicSpread)}
           tone={quality.economicSpread}
           sub="Value created per dollar invested"
         />
       </div>
+
+      <ExpectedReturnPanel
+        expected={report.expectedReturn}
+        price={report.price}
+        currency={currency}
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* ---- Model spread ---- */}

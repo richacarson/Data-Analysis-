@@ -1,10 +1,12 @@
 import {
+  getAnnualRatios,
   getBalanceSheets,
   getCashFlowStatements,
   getEnterpriseValues,
   getEstimates,
   getFinancialScores,
   getIncomeStatements,
+  getIndustryPe,
   getKeyMetricsTTM,
   getPriceTargetConsensus,
   getProfile,
@@ -28,6 +30,14 @@ import {
 } from './multiples';
 import { reverseDcf } from './reverse-dcf';
 import {
+  expectedReturn,
+  justifiedPriceEarnings,
+  requiredDiscount,
+  requiredExitMultiple,
+  scenarioGrid,
+} from './expected-return';
+import { exitMultipleAnchors, median } from './exit-multiple';
+import {
   cashFlowModelsApply,
   isFinancialSector,
   isRealEstateTrust,
@@ -38,7 +48,16 @@ import { clamp, impliedCostOfDebt, wacc } from './wacc';
 /** Long-run US equity risk premium. Overridable per valuation. */
 export const DEFAULT_ERP = 0.05;
 
+/** House expected-return settings: a three-year horizon against a 15% hurdle. */
+export const DEFAULT_HORIZON_YEARS = 3;
+export const DEFAULT_HURDLE = 0.15;
+
 export interface ValuationOverrides {
+  /** Exit P/E for the expected-return model, distinct from the DCF's terminal multiple. */
+  exitPe?: number;
+  horizonYears?: number;
+  hurdle?: number;
+  targetNetMargin?: number;
   discountRate?: number;
   terminalGrowth?: number;
   forecastYears?: number;
@@ -83,6 +102,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     ratios,
     scores,
     priceTarget,
+    annualRatios,
     riskFreeRate,
   ] = await Promise.all([
     // The profile carries the price and share count, so it is the one hard requirement.
@@ -96,6 +116,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     optional('ratios', getRatiosTTM(ticker), null),
     optional('financial scores', getFinancialScores(ticker), null),
     optional('price target consensus', getPriceTargetConsensus(ticker), null),
+    optional('annual ratios', getAnnualRatios(ticker, 10), []),
     getRiskFreeRate(),
   ]);
 
@@ -294,6 +315,94 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     marketCap,
   });
 
+  // ---- Expected return: the house method ----------------------------------
+  /*
+   * Project consensus earnings to a horizon, apply an exit multiple, and read
+   * off the annualised return from today's price. Two assumptions instead of a
+   * DCF's five, and the output is the decision variable rather than an
+   * abstract fair value.
+   */
+  const horizonYears = overrides.horizonYears ?? DEFAULT_HORIZON_YEARS;
+  const hurdle = overrides.hurdle ?? DEFAULT_HURDLE;
+  const dividendYield = ratios?.dividendYieldTTM ?? 0;
+
+  // The estimate closest to the horizon, not simply the furthest one published.
+  const targetFiscalYear = new Date().getFullYear() + horizonYears;
+  const horizonEstimate =
+    sortedEstimates.find((e) => Number(e.date.slice(0, 4)) >= targetFiscalYear) ??
+    sortedEstimates[sortedEstimates.length - 1] ??
+    null;
+
+  // The company's own trailing multiple at each fiscal year end.
+  const ownPeHistory = annualRatios.map((r) => r.priceToEarningsRatio);
+
+  // Industry P/E arrives per exchange per day; reduce to one number.
+  let industryPeNow: number | null = null;
+  let industryPeMedian: number | null = null;
+  if (profile.industry) {
+    const to = new Date();
+    const from = new Date(to.getTime() - 365 * 24 * 60 * 60 * 1000);
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    const rows = await optional(
+      'industry P/E',
+      getIndustryPe(profile.industry, iso(from), iso(to)),
+      [],
+    );
+    if (rows.length) {
+      const latestDate = rows.reduce((a, r) => (r.date > a ? r.date : a), rows[0].date);
+      industryPeNow = median(rows.filter((r) => r.date === latestDate).map((r) => r.pe));
+      industryPeMedian = median(rows.map((r) => r.pe));
+    }
+  }
+
+  const justifiedPe = justifiedPriceEarnings(
+    roic,
+    Math.min(forwardEpsCagr ?? 0, roic * 0.9),
+    capital.costOfEquity,
+  );
+
+  const anchors = exitMultipleAnchors({
+    ownHistory: ownPeHistory,
+    industryPe: industryPeNow,
+    industryMedian: industryPeMedian,
+    justified: justifiedPe,
+  });
+
+  const exitPe = overrides.exitPe ?? anchors.recommended ?? null;
+  const epsAtHorizon = horizonEstimate?.epsAvg ?? null;
+
+  const expected =
+    exitPe !== null && epsAtHorizon !== null && unitsComparable
+      ? expectedReturn({
+          price,
+          epsAtHorizon,
+          exitMultiple: exitPe,
+          dividendYield,
+          years: horizonYears,
+        })
+      : null;
+
+  const mustBelieve =
+    epsAtHorizon !== null && unitsComparable
+      ? requiredExitMultiple(price, epsAtHorizon, hurdle, dividendYield, horizonYears)
+      : null;
+
+  const scenarios =
+    horizonEstimate && unitsComparable && exitPe !== null
+      ? scenarioGrid(
+          price,
+          [
+            { label: 'Analyst low', eps: horizonEstimate.epsLow },
+            { label: 'Consensus', eps: horizonEstimate.epsAvg },
+            { label: 'Analyst high', eps: horizonEstimate.epsHigh },
+          ],
+          [exitPe * 0.8, exitPe, exitPe * 1.2],
+          dividendYield,
+          horizonYears,
+          hurdle,
+        )
+      : null;
+
   // ---- Consensus of models -------------------------------------------------
   const allCandidates = [
     { label: 'FCF DCF', value: fcfDcf.fairValuePerShare, applies: fcfModelApplies },
@@ -366,6 +475,23 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
       earningsPower: { total: epv, perShare: epvPerShare },
       grahamNumber: grahamNumber(eps, bookPerShare),
       multiples,
+    },
+
+    expectedReturn: {
+      horizonYears,
+      hurdle,
+      dividendYield,
+      epsAtHorizon,
+      horizonFiscalYear: horizonEstimate?.date.slice(0, 4) ?? null,
+      analystCount: horizonEstimate?.numAnalystsEps ?? 0,
+      exitPe,
+      exitPeSource: overrides.exitPe !== undefined ? 'Manual override' : anchors.recommendedSource,
+      anchors: anchors.anchors,
+      result: expected,
+      requiredExitMultiple: mustBelieve,
+      requiredDiscount: requiredDiscount(hurdle, dividendYield, horizonYears),
+      scenarios,
+      clearsHurdle: expected ? expected.totalCagr >= hurdle : null,
     },
 
     blendedFairValue,

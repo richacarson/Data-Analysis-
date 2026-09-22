@@ -215,3 +215,25 @@ export interface SearchResult {
 }
 
 export type Period = 'annual' | 'quarter';
+
+/** One fiscal year of ratios. `priceToEarningsRatio` is trailing, at year end. */
+export interface AnnualRatios {
+  symbol: string;
+  date: string;
+  fiscalYear: string;
+  period: string;
+  priceToEarningsRatio: number;
+  priceToSalesRatio: number;
+  priceToFreeCashFlowRatio: number;
+  priceToBookRatio: number;
+  netProfitMargin: number;
+  netIncomePerShare: number;
+  dividendYield: number;
+}
+
+export interface IndustryPe {
+  date: string;
+  industry: string;
+  exchange: string;
+  pe: number;
+}

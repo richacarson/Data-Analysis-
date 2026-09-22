@@ -85,6 +85,16 @@ const CHECKS = [
     fields: ['symbol', 'name'],
   },
   {
+    endpoint: 'ratios',
+    params: { symbol: SYMBOL, period: 'annual', limit: 3 },
+    fields: ['priceToEarningsRatio', 'netIncomePerShare', 'fiscalYear'],
+  },
+  {
+    endpoint: 'historical-industry-pe',
+    params: { industry: 'Software - Infrastructure', from: '2026-09-01', to: '2026-09-18' },
+    fields: ['date', 'industry', 'pe'],
+  },
+  {
     endpoint: 'treasury-rates',
     params: {},
     fields: ['date'],

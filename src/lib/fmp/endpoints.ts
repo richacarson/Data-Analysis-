@@ -1,5 +1,6 @@
 import { fmp, fmpList, TTL } from './client';
 import type {
+  AnnualRatios,
   BalanceSheetStatement,
   CashFlowStatement,
   EnterpriseValue,
@@ -7,6 +8,7 @@ import type {
   FinancialScores,
   IncomeStatement,
   KeyMetricsTTM,
+  IndustryPe,
   Period,
   PriceTargetConsensus,
   Profile,
@@ -34,6 +36,17 @@ export const getEstimates = (symbol: string, period: Period = 'annual', limit = 
 
 export const getKeyMetricsTTM = (symbol: string) =>
   fmpList<KeyMetricsTTM>('key-metrics-ttm', { symbol }, TTL.ratios).then((r) => r[0] ?? null);
+
+/** Annual ratios, used for the company's own trailing P/E at each year end. */
+export const getAnnualRatios = (symbol: string, limit = 10) =>
+  fmpList<AnnualRatios>('ratios', { symbol, period: 'annual', limit }, TTL.ratios);
+
+/**
+ * Daily P/E for an industry. Returns one row per exchange per day, so callers
+ * should reduce across exchanges rather than assume a single series.
+ */
+export const getIndustryPe = (industry: string, from: string, to: string) =>
+  fmpList<IndustryPe>('historical-industry-pe', { industry, from, to }, TTL.ratios);
 
 export const getRatiosTTM = (symbol: string) =>
   fmpList<RatiosTTM>('ratios-ttm', { symbol }, TTL.ratios).then((r) => r[0] ?? null);
