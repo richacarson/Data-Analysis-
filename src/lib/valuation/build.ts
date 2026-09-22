@@ -7,6 +7,7 @@ import {
   getFinancialScores,
   getIncomeStatements,
   getIndustryPe,
+  getRevenueSegments,
   getKeyMetricsTTM,
   getPriceTargetConsensus,
   getProfile,
@@ -37,6 +38,12 @@ import {
   scenarioGrid,
 } from './expected-return';
 import { exitMultipleAnchors, median } from './exit-multiple';
+import {
+  epsActualVsEstimate,
+  indexedToStart,
+  revenueBySegment,
+  trailingTwelveMonths,
+} from './series';
 import {
   cashFlowModelsApply,
   isFinancialSector,
@@ -103,6 +110,8 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     scores,
     priceTarget,
     annualRatios,
+    quarterlyIncome,
+    segments,
     riskFreeRate,
   ] = await Promise.all([
     // The profile carries the price and share count, so it is the one hard requirement.
@@ -117,6 +126,8 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     optional('financial scores', getFinancialScores(ticker), null),
     optional('price target consensus', getPriceTargetConsensus(ticker), null),
     optional('annual ratios', getAnnualRatios(ticker, 10), []),
+    optional('quarterly income', getIncomeStatements(ticker, 'quarter', 24), []),
+    optional('revenue segments', getRevenueSegments(ticker), []),
     getRiskFreeRate(),
   ]);
 
@@ -410,6 +421,39 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
         )
       : null;
 
+  // ---- Chart series --------------------------------------------------------
+  const ttm = trailingTwelveMonths(
+    quarterlyIncome.map((q) => ({
+      date: q.date,
+      fiscalYear: q.fiscalYear,
+      period: q.period,
+      revenue: q.revenue,
+      netIncome: q.netIncome,
+    })),
+  );
+
+  const epsSeries = epsActualVsEstimate(
+    income.map((i) => ({ fiscalYear: i.fiscalYear, epsDiluted: i.epsDiluted })),
+    sortedEstimates,
+  );
+
+  const segmentSeries = revenueBySegment(
+    segments.map((r) => ({ fiscalYear: r.fiscalYear, data: r.data })),
+  );
+
+  // Enterprise values carry the price at each fiscal year end, which lines up
+  // with the statements without needing a separate price history.
+  const indexed = indexedToStart(
+    [...enterprise]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((ev) => ({
+        year: ev.date.slice(0, 4),
+        price: ev.stockPrice,
+        fundamental:
+          cashflow.find((c) => c.date === ev.date)?.freeCashFlow ?? 0,
+      })),
+  );
+
   // ---- Consensus of models -------------------------------------------------
   const allCandidates = [
     { label: 'FCF DCF', value: fcfDcf.fairValuePerShare, applies: fcfModelApplies },
@@ -536,6 +580,13 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     consensus: {
       priceTarget,
       estimates: sortedEstimates,
+    },
+
+    series: {
+      marginTtm: ttm.slice(-20),
+      eps: epsSeries,
+      segments: segmentSeries,
+      indexedPriceVsFcf: indexed,
     },
 
     history: {

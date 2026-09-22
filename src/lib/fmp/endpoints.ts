@@ -2,6 +2,7 @@ import { fmp, fmpList, TTL } from './client';
 import type {
   AnnualRatios,
   BatchQuote,
+  RevenueSegment,
   BalanceSheetStatement,
   CashFlowStatement,
   EnterpriseValue,
@@ -60,6 +61,10 @@ export const getPriceTargetConsensus = (symbol: string) =>
     (r) => r[0] ?? null,
   );
 
+
+/** Revenue split by product line, used for the stacked composition chart. */
+export const getRevenueSegments = (symbol: string, period: Period = 'annual') =>
+  fmpList<RevenueSegment>('revenue-product-segmentation', { symbol, period });
 
 /** Prices for many symbols in one request, so a screen is not N calls. */
 export const getBatchQuotes = (symbols: string[]) =>

@@ -5,6 +5,12 @@ import { CashFlowChart, EpsProjectionChart, HistoryChart, ModelSpreadChart } fro
 import { SensitivityTable } from '@/components/SensitivityTable';
 import { ExpectedReturnPanel } from '@/components/ExpectedReturn';
 import {
+  EpsHistoryChart,
+  IndexedChart,
+  MarginTtmChart,
+  SegmentChart,
+} from '@/components/FundamentalCharts';
+import {
   bigMoney,
   coverage,
   fiscalYear,
@@ -372,6 +378,52 @@ export default async function StockPage({
           />
         </Panel>
       </div>
+
+      {/* ---- Chart pack ---- */}
+      {report.series.eps.length > 0 && (
+        <Panel
+          eyebrow="Earnings"
+          title="EPS — reported and consensus"
+          subtitle="Hatched bars are analyst estimates"
+        >
+          <EpsHistoryChart data={report.series.eps} />
+        </Panel>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {report.series.marginTtm.length > 0 && (
+          <Panel eyebrow="Profitability" title="Net margin (TTM)" subtitle="Rolling four quarters">
+            <MarginTtmChart data={report.series.marginTtm} />
+          </Panel>
+        )}
+
+        {report.series.indexedPriceVsFcf.length > 1 && (
+          <Panel
+            eyebrow="Price vs business"
+            title="Share price and free cash flow, rebased"
+            subtitle="Both start at 100"
+          >
+            <IndexedChart data={report.series.indexedPriceVsFcf} fundamentalLabel="Free cash flow" />
+            <p className="border-t border-line px-4 py-3 text-[11px] leading-relaxed text-t4">
+              Rebased rather than drawn on two axes, where the apparent relationship depends on
+              whichever ranges were chosen. The gap between the lines is the re-rating.
+            </p>
+          </Panel>
+        )}
+      </div>
+
+      {report.series.segments.points.length > 1 && (
+        <Panel
+          eyebrow="Mix"
+          title="Revenue by segment"
+          subtitle={`${report.series.segments.segments.length} segments as currently reported`}
+        >
+          <SegmentChart
+            points={report.series.segments.points}
+            segments={report.series.segments.segments}
+          />
+        </Panel>
+      )}
 
       {/* ---- Sensitivity ---- */}
       <Panel

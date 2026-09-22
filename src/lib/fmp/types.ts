@@ -244,3 +244,12 @@ export interface BatchQuote {
   change: number;
   volume: number;
 }
+
+/** Segment labels change as companies re-cut their reporting, so `data` is open. */
+export interface RevenueSegment {
+  symbol: string;
+  fiscalYear: number;
+  period: string;
+  date: string;
+  data: Record<string, number>;
+}
