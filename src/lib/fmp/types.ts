@@ -86,6 +86,7 @@ export interface BalanceSheetStatement {
   shortTermInvestments: number;
   cashAndShortTermInvestments: number;
   totalCurrentAssets: number;
+  propertyPlantEquipmentNet: number;
   totalNonCurrentAssets: number;
   totalAssets: number;
   totalCurrentLiabilities: number;
@@ -155,6 +156,7 @@ export interface KeyMetricsTTM {
   capexToRevenueTTM: number;
   researchAndDevelopementToRevenueTTM: number;
   stockBasedCompensationToRevenueTTM: number;
+  intangiblesToTotalAssetsTTM: number;
 }
 
 export interface RatiosTTM {

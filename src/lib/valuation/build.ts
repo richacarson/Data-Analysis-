@@ -38,6 +38,8 @@ import {
   scenarioGrid,
 } from './expected-return';
 import { exitMultipleAnchors, median } from './exit-multiple';
+import { fairValueRange, grahamIsInformative } from './blend';
+import { latestCapexSplit } from './capex';
 import {
   epsActualVsEstimate,
   indexedToStart,
@@ -213,6 +215,28 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
   const isFinancial = isFinancialSector(profile.sector, profile.industry);
 
   const baseFcf = latestFcf?.freeCashFlow ?? 0;
+  /*
+   * Reported free cash flow subtracts growth spending as well as maintenance,
+   * so a company mid-build looks like it generates far less than its existing
+   * operations actually do.
+   */
+  const capexSplit = latestCapexSplit(
+    cashflow
+      .map((c) => {
+        const inc = income.find((i) => i.date === c.date);
+        const bal = balance.find((b) => b.date === c.date);
+        return {
+          date: c.date,
+          revenue: inc?.revenue ?? 0,
+          capitalExpenditure: c.capitalExpenditure,
+          depreciationAndAmortization: c.depreciationAndAmortization,
+          operatingCashFlow: c.operatingCashFlow,
+          propertyPlantEquipmentNet: bal?.propertyPlantEquipmentNet ?? 0,
+        };
+      })
+      .filter((y) => y.revenue > 0),
+  );
+
   const fcfVerdict = cashFlowModelsApply(profile.sector, profile.industry, baseFcf);
 
   // If the statements are denominated differently from the quote, no per-share
@@ -479,9 +503,25 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     .filter((c) => c.applies && Number.isFinite(c.value) && c.value > 0)
     .map(({ label, value }) => ({ label, value }));
 
-  const blendedFairValue = candidates.length
-    ? candidates.reduce((s, c) => s + c.value, 0) / candidates.length
-    : 0;
+  const intangiblesShare = metrics?.intangiblesToTotalAssetsTTM ?? 0;
+  const valueRange = fairValueRange({
+    fcfDcf: { label: 'FCF DCF', value: fcfDcf.fairValuePerShare, applies: fcfModelApplies },
+    earningsDcf: {
+      label: 'Earnings DCF',
+      value: epsDcf.fairValuePerShare,
+      applies: unitsComparable,
+    },
+    earningsPower: { label: 'Earnings power', value: epvPerShare, applies: unitsComparable },
+    graham: {
+      label: 'Graham number',
+      value: grahamNumber(eps, bookPerShare),
+      applies: unitsComparable,
+    },
+    grahamInformative: grahamIsInformative(roic, intangiblesShare),
+  });
+
+  // Kept for the model-spread chart; the headline is the range, not an average.
+  const blendedFairValue = valueRange.midpoint ?? 0;
 
   const grid = sensitivityGrid(
     baseFcf,
@@ -546,8 +586,10 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
       clearsHurdle: expected ? expected.totalCagr >= hurdle : null,
     },
 
+    valueRange,
+    capexSplit,
     blendedFairValue,
-    upside: price > 0 ? blendedFairValue / price - 1 : 0,
+    upside: price > 0 && valueRange.midpoint ? valueRange.midpoint / price - 1 : 0,
     modelSpread: candidates,
     modelNotes,
     applicability: {

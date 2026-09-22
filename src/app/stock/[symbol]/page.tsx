@@ -179,14 +179,16 @@ export default async function StockPage({
           sub={`Exit multiple for ${pct(report.expectedReturn.hurdle, 0)}`}
         />
         <Stat
-          label="Blended fair value"
-          value={report.modelSpread.length ? money(report.blendedFairValue, currency) : '—'}
+          label="Fair value range"
+          value={
+            report.valueRange.low !== null
+              ? `${money(report.valueRange.low, currency)} – ${money(report.valueRange.high!, currency)}`
+              : '—'
+          }
           sub={
-            report.modelSpread.length
-              ? `${report.modelSpread.length} of 4 models: ${report.modelSpread
-                  .map((m) => m.label)
-                  .join(', ')}`
-              : 'No model applies to this company'
+            report.valueRange.models.length
+              ? report.valueRange.models.map((m) => m.label).join(' · ')
+              : 'No growth model applies here'
           }
         />
         <Stat
@@ -218,6 +220,26 @@ export default async function StockPage({
           className="lg:col-span-2"
         >
           <ModelSpreadChart data={report.modelSpread} price={report.price} />
+          <div className="border-t border-line">
+            {report.valueRange.models.map((m) => (
+              <Row key={m.label} label={m.label} value={money(m.value, currency)} hint={m.note} />
+            ))}
+            {report.valueRange.floor && (
+              <Row
+                label={`${report.valueRange.floor.label} (floor)`}
+                value={money(report.valueRange.floor.value, currency)}
+                hint={report.valueRange.floor.note}
+              />
+            )}
+            {report.valueRange.crossChecks.map((c) => (
+              <Row
+                key={c.label}
+                label={`${c.label} (cross-check)`}
+                value={money(c.value, currency)}
+                hint={c.note}
+              />
+            ))}
+          </div>
           <RangeBar
             low={models.earningsDcf.bearFairValue}
             high={models.earningsDcf.bullFairValue}
@@ -378,6 +400,49 @@ export default async function StockPage({
           />
         </Panel>
       </div>
+
+      {report.capexSplit && report.capexSplit.methodsDisagree && (
+        <Panel
+          eyebrow="Capital spending"
+          title="Maintenance versus growth"
+          subtitle="Reported free cash flow charges both"
+        >
+          <p className="px-4 py-3 text-[12px] leading-relaxed text-t3">
+            Reported free cash flow subtracts every dollar of capital spending, including the part
+            building new capacity. Separating the two changes what the existing business appears to
+            generate — and the two standard methods disagree here, so both are shown.
+          </p>
+          <Row
+            label="Operating cash flow"
+            value={bigMoney(
+              report.capexSplit.reportedFreeCashFlow + report.capexSplit.totalCapex,
+              currency,
+            )}
+          />
+          <Row label="Total capital spending" value={bigMoney(report.capexSplit.totalCapex, currency)} />
+          <Row
+            label="Reported free cash flow"
+            value={bigMoney(report.capexSplit.reportedFreeCashFlow, currency)}
+            hint="After all capital spending"
+          />
+          <Row
+            label="Owner cash flow — sales-based"
+            value={bigMoney(report.capexSplit.ownerFreeCashFlow, currency)}
+            hint="Greenwald: growth capital is the fixed-asset intensity applied to the sales increase already achieved"
+          />
+          <Row
+            label="Owner cash flow — depreciation"
+            value={bigMoney(report.capexSplit.ownerFreeCashFlowFromDepreciation, currency)}
+            hint="Depreciation as the proxy for capacity consumed"
+          />
+          <div className="px-4 py-3">
+            <Badge tone="flat">
+              Building ahead of revenue makes the sales-based method overstate maintenance; the
+              lower of the two is used elsewhere.
+            </Badge>
+          </div>
+        </Panel>
+      )}
 
       {/* ---- Chart pack ---- */}
       {report.series.eps.length > 0 && (
