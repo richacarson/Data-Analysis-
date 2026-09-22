@@ -237,3 +237,10 @@ export interface IndustryPe {
   exchange: string;
   pe: number;
 }
+
+export interface BatchQuote {
+  symbol: string;
+  price: number;
+  change: number;
+  volume: number;
+}

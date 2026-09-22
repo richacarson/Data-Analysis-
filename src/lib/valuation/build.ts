@@ -355,11 +355,18 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     }
   }
 
-  const justifiedPe = justifiedPriceEarnings(
-    roic,
-    Math.min(forwardEpsCagr ?? 0, roic * 0.9),
-    capital.costOfEquity,
+  /*
+   * The justified multiple is a perpetuity, so it needs a sustainable growth
+   * rate rather than the next three years' forecast. Feeding it a 19% near-term
+   * rate against a 10% cost of equity makes the formula undefined precisely for
+   * the fast growers where the anchor is most wanted, so growth is capped below
+   * the discount rate and below what the returns on capital can fund.
+   */
+  const sustainableGrowth = Math.max(
+    0,
+    Math.min(forwardEpsCagr ?? 0, roic * 0.9, capital.costOfEquity - 0.02),
   );
+  const justifiedPe = justifiedPriceEarnings(roic, sustainableGrowth, capital.costOfEquity);
 
   const anchors = exitMultipleAnchors({
     ownHistory: ownPeHistory,
@@ -487,6 +494,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
       exitPe,
       exitPeSource: overrides.exitPe !== undefined ? 'Manual override' : anchors.recommendedSource,
       anchors: anchors.anchors,
+      sustainableGrowth,
       result: expected,
       requiredExitMultiple: mustBelieve,
       requiredDiscount: requiredDiscount(hurdle, dividendYield, horizonYears),

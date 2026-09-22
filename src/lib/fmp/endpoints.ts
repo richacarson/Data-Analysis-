@@ -1,6 +1,7 @@
 import { fmp, fmpList, TTL } from './client';
 import type {
   AnnualRatios,
+  BatchQuote,
   BalanceSheetStatement,
   CashFlowStatement,
   EnterpriseValue,
@@ -58,6 +59,11 @@ export const getPriceTargetConsensus = (symbol: string) =>
   fmpList<PriceTargetConsensus>('price-target-consensus', { symbol }, TTL.estimates).then(
     (r) => r[0] ?? null,
   );
+
+
+/** Prices for many symbols in one request, so a screen is not N calls. */
+export const getBatchQuotes = (symbols: string[]) =>
+  fmpList<BatchQuote>('batch-quote-short', { symbols: symbols.join(',') }, TTL.quote);
 
 /**
  * Symbol lookup. FMP splits this across two endpoints: `search-symbol` matches

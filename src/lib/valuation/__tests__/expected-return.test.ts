@@ -219,3 +219,20 @@ describe('median and percentile', () => {
     expect(percentile([10, 20, 30, 40, 50], 0.5)).toBe(30);
   });
 });
+
+describe('justified P/E for fast growers', () => {
+  it('is defined once growth is capped below the discount rate', () => {
+    // Microsoft-like: 19% forecast growth against a ~10.5% cost of equity makes
+    // the raw formula undefined, which is exactly when the anchor is wanted.
+    expect(justifiedPriceEarnings(0.3, 0.19, 0.105)).toBeNull();
+    const capped = Math.max(0, Math.min(0.19, 0.3 * 0.9, 0.105 - 0.02));
+    expect(capped).toBeCloseTo(0.085);
+    expect(justifiedPriceEarnings(0.3, capped, 0.105)).toBeGreaterThan(0);
+  });
+
+  it('rewards the higher-return business at the same capped growth', () => {
+    const high = justifiedPriceEarnings(0.4, 0.085, 0.105)!;
+    const low = justifiedPriceEarnings(0.15, 0.085, 0.105)!;
+    expect(high).toBeGreaterThan(low);
+  });
+});

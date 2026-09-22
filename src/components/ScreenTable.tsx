@@ -1,0 +1,158 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import type { ScreenRow } from '@/lib/screen/run';
+import { sleevesHolding } from '@/data/sleeves';
+import { money, multiple, num, pct, signedPct } from '@/lib/format';
+
+type SortKey = 'expectedCagr' | 'stretch' | 'symbol' | 'requiredExitPe' | 'dividendYield';
+
+const COLUMNS: Array<{ key: SortKey | null; label: string; numeric?: boolean }> = [
+  { key: 'symbol', label: 'Ticker' },
+  { key: null, label: 'Sleeves' },
+  { key: null, label: 'Price', numeric: true },
+  { key: null, label: 'EPS at horizon', numeric: true },
+  { key: null, label: 'Exit P/E', numeric: true },
+  { key: 'requiredExitPe', label: 'Must believe', numeric: true },
+  { key: 'stretch', label: 'Stretch', numeric: true },
+  { key: 'dividendYield', label: 'Yield', numeric: true },
+  { key: 'expectedCagr', label: 'Expected CAGR', numeric: true },
+];
+
+export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: number }) {
+  const [sort, setSort] = useState<SortKey>('expectedCagr');
+  const [descending, setDescending] = useState(true);
+  const [onlyClearing, setOnlyClearing] = useState(false);
+
+  const sorted = useMemo(() => {
+    const filtered = onlyClearing ? rows.filter((r) => r.clearsHurdle) : rows;
+    return [...filtered].sort((a, b) => {
+      if (sort === 'symbol') {
+        return descending ? b.symbol.localeCompare(a.symbol) : a.symbol.localeCompare(b.symbol);
+      }
+      const av = a[sort];
+      const bv = b[sort];
+      // Rows without a value sort last regardless of direction — they are not
+      // "the worst", they are unknown.
+      if (av === null || av === undefined) return 1;
+      if (bv === null || bv === undefined) return -1;
+      return descending ? (bv as number) - (av as number) : (av as number) - (bv as number);
+    });
+  }, [rows, sort, descending, onlyClearing]);
+
+  function toggle(key: SortKey) {
+    if (key === sort) setDescending((d) => !d);
+    else {
+      setSort(key);
+      setDescending(true);
+    }
+  }
+
+  return (
+    <>
+      <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+        <label className="flex cursor-pointer items-center gap-2 text-[12px] text-t3">
+          <input
+            type="checkbox"
+            checked={onlyClearing}
+            onChange={(e) => setOnlyClearing(e.target.checked)}
+            className="accent-gold"
+          />
+          Only show holdings clearing {pct(hurdle, 0)}
+        </label>
+        <span className="text-[11px] text-t4">{sorted.length} rows</span>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px] text-[12px]">
+          <thead>
+            <tr className="border-b border-line">
+              {COLUMNS.map((c) => (
+                <th
+                  key={c.label}
+                  scope="col"
+                  className={`px-3 py-2 ${c.numeric ? 'text-right' : 'text-left'}`}
+                >
+                  {c.key ? (
+                    <button
+                      onClick={() => toggle(c.key as SortKey)}
+                      className={`eyebrow-muted hover:text-gold ${
+                        sort === c.key ? 'text-gold' : ''
+                      }`}
+                    >
+                      {c.label}
+                      {sort === c.key ? (descending ? ' ↓' : ' ↑') : ''}
+                    </button>
+                  ) : (
+                    <span className="eyebrow-muted">{c.label}</span>
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((r) => {
+              const sleeves = sleevesHolding(r.symbol);
+              return (
+                <tr key={r.symbol} className="border-b border-line/50 hover:bg-card">
+                  <td className="px-3 py-2">
+                    <Link href={`/stock/${r.symbol}`} className="font-semibold text-t1 hover:text-gold">
+                      {r.symbol}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-2 text-[10px] uppercase tracking-label text-t4">
+                    {sleeves.map((s) => s.name).join(' · ')}
+                  </td>
+                  <td className="tabular px-3 py-2 text-right text-t2">
+                    {r.price !== null ? money(r.price) : '—'}
+                  </td>
+                  <td className="tabular px-3 py-2 text-right text-t2">
+                    {r.epsAtHorizon !== null ? (
+                      <>
+                        {num(r.epsAtHorizon)}
+                        <span className="ml-1 text-[10px] text-t4">FY{r.horizonFiscalYear}</span>
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td className="tabular px-3 py-2 text-right text-t2">{multiple(r.exitPe)}</td>
+                  <td className="tabular px-3 py-2 text-right text-t2">
+                    {multiple(r.requiredExitPe)}
+                  </td>
+                  <td
+                    className={`tabular px-3 py-2 text-right ${
+                      r.stretch === null ? 'text-t4' : r.stretch > 0 ? 'text-dn' : 'text-up'
+                    }`}
+                    title="How far above the anchor multiple the price needs to re-rate"
+                  >
+                    {r.stretch !== null ? signedPct(r.stretch, 0) : '—'}
+                  </td>
+                  <td className="tabular px-3 py-2 text-right text-t3">
+                    {r.dividendYield > 0 ? pct(r.dividendYield) : '—'}
+                  </td>
+                  <td
+                    className={`tabular px-3 py-2 text-right font-semibold ${
+                      r.expectedCagr === null
+                        ? 'text-t4'
+                        : r.clearsHurdle
+                          ? 'text-up'
+                          : 'text-dn'
+                    }`}
+                  >
+                    {r.expectedCagr !== null ? signedPct(r.expectedCagr) : (
+                      <span className="text-[10px] font-normal" title={r.note}>
+                        {r.note ?? '—'}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}

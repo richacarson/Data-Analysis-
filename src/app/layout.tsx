@@ -40,6 +40,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 Paradiem
               </span>
             </Link>
+            <nav className="hidden shrink-0 items-center gap-4 md:flex">
+              <Link
+                href="/screen"
+                className="text-[12px] font-medium text-t3 transition-colors hover:text-gold"
+              >
+                Screen
+              </Link>
+            </nav>
             <SearchBar />
             <UserMenu />
           </div>
