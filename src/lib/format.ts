@@ -11,6 +11,22 @@ export function money(n: number | null | undefined, currency = 'USD'): string {
   }).format(n);
 }
 
+/**
+ * Model outputs to the dollar once they pass $100. A fair value quoted to the
+ * cent claims a precision no valuation model has, and the cents cost width a
+ * phone cannot spare.
+ */
+export function roundMoney(n: number | null | undefined, currency = 'USD'): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return '—';
+  const whole = Math.abs(n) >= 100;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: whole ? 0 : 2,
+  }).format(n);
+}
+
 /** Large figures as $4.70T / $416.2B / $12.7M. */
 export function bigMoney(n: number | null | undefined, currency = 'USD'): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return '—';

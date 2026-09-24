@@ -132,14 +132,14 @@ export function Watchlist() {
 
   return (
     <Panel title="Watchlist" subtitle={subtitle}>
-      <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
+      <div className="flex items-stretch gap-2 border-b border-line px-4 py-3">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && add(input)}
           placeholder="Add ticker…"
           aria-label="Add a ticker to your watchlist"
-          className="w-40 border border-line bg-card px-2.5 py-1.5 text-[13px] outline-none placeholder:text-t3 focus:border-lineActive"
+          className="field min-w-0 flex-1 py-1.5 sm:w-40 sm:flex-none"
         />
         <button
           onClick={() => add(input)}

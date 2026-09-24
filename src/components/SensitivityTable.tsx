@@ -1,4 +1,4 @@
-import { money, pct, signedPct } from '@/lib/format';
+import { money, pct, roundMoney, signedPct } from '@/lib/format';
 import type { SensitivityCell } from '@/lib/valuation/dcf';
 
 /**
@@ -27,23 +27,23 @@ export function SensitivityTable({
   const columns = grid[0];
 
   return (
-    <div className="overflow-x-auto p-4">
-      <table className="w-full min-w-[640px] border-separate border-spacing-0.5 text-[12px]">
+    <div className="overflow-x-auto p-3 sm:p-4">
+      <table className="w-full border-separate border-spacing-0.5 text-[11px] sm:text-[12px]">
         <caption className="sr-only">
           Fair value per share across discount rate and terminal growth assumptions
         </caption>
         <thead>
           <tr>
-            <th scope="col" className="px-2 py-1.5 text-left">
+            <th scope="col" className="px-1 py-1.5 text-left sm:px-2">
               <span className="eyebrow-muted">WACC ╲ g</span>
             </th>
             {columns.map((c) => (
               <th
                 key={c.terminalGrowth}
                 scope="col"
-                className="tabular px-2 py-1.5 text-right text-[11px] font-medium text-t3"
+                className="tabular px-1 py-1.5 text-right text-[10px] font-medium text-t3 sm:px-2 sm:text-[11px]"
               >
-                {pct(c.terminalGrowth, 2)}
+                {pct(c.terminalGrowth, 1)}
               </th>
             ))}
           </tr>
@@ -53,17 +53,17 @@ export function SensitivityTable({
             <tr key={row[0].discountRate}>
               <th
                 scope="row"
-                className="tabular px-2 py-1.5 text-left text-[11px] font-medium text-t3"
+                className="tabular px-1 py-1.5 text-left text-[10px] font-medium text-t3 sm:px-2 sm:text-[11px]"
               >
-                {pct(row[0].discountRate, 2)}
+                {pct(row[0].discountRate, 1)}
               </th>
               {row.map((cell) => (
                 <td
                   key={`${cell.discountRate}-${cell.terminalGrowth}`}
-                  className={`tabular px-2 py-1.5 text-right ${cellTone(cell.upside)}`}
+                  className={`tabular px-1 py-2 text-right sm:px-2 sm:py-1.5 ${cellTone(cell.upside)}`}
                   title={`${signedPct(cell.upside)} vs ${money(price, currency)}`}
                 >
-                  {money(cell.fairValuePerShare, currency)}
+                  {roundMoney(cell.fairValuePerShare, currency)}
                 </td>
               ))}
             </tr>
@@ -71,8 +71,7 @@ export function SensitivityTable({
         </tbody>
       </table>
       <p className="mt-3 text-[11px] text-t4">
-        Green cells sit above today&apos;s price of {money(price, currency)}; hover any cell for
-        the implied upside.
+        Green cells sit above today&apos;s price of {money(price, currency)}; red cells below.
       </p>
     </div>
   );

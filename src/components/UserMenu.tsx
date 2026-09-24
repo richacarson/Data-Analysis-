@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
-export function UserMenu() {
+export function UserMenu({ variant = 'inline' }: { variant?: 'inline' | 'panel' }) {
   const router = useRouter();
   const [supabase] = useState(() => createClient());
   const [email, setEmail] = useState<string | null>(null);
@@ -26,6 +26,20 @@ export function UserMenu() {
     // Refresh so the middleware re-evaluates and redirects to /login.
     router.replace('/login');
     router.refresh();
+  }
+
+  if (variant === 'panel') {
+    return (
+      <div className="panel flex items-center justify-between gap-4 px-4 py-3.5 sm:px-6">
+        <div className="min-w-0">
+          <p className="eyebrow-muted">Signed in</p>
+          <p className="mt-1 truncate text-[13px] text-t1">{email}</p>
+        </div>
+        <button onClick={signOut} className="btn shrink-0 py-2">
+          Sign out
+        </button>
+      </div>
+    );
   }
 
   return (

@@ -17,7 +17,8 @@ import {
 import { bigMoney, num, pct } from '@/lib/format';
 
 const GRID = 'rgba(201,168,76,0.10)';
-const AXIS = { stroke: '#8B7355', fontSize: 10, fontFamily: 'var(--font-plex-mono)' };
+// Tick text is filled, not stroked: a stroke on glyphs smears them into a faux bold.
+const AXIS = { fill: '#A09C94', stroke: 'none', fontSize: 10, fontFamily: 'var(--font-plex-mono)' };
 const S1 = '#AE8E2F';
 const S2 = '#5D82D8';
 const UP = '#34D399';

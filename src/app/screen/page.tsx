@@ -43,15 +43,15 @@ export default async function ScreenPage({
 
   return (
     <div className="space-y-4">
-      <div className="panel px-5 py-4">
+      <div className="panel px-4 py-4 sm:px-5">
         <p className="eyebrow">Portfolio screen</p>
         <h1 className="mt-1.5 font-serif text-[24px] tracking-tight text-t1">
           {sleeve ? sleeve.name : 'All sleeves'}
         </h1>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-0.5 sm:mx-0 sm:flex-wrap sm:px-0">
           <Link
             href="/screen"
-            className={`border px-3 py-1.5 text-[12px] font-medium ${
+            className={`shrink-0 border px-3 py-1.5 text-[12px] font-medium ${
               !sleeve ? 'border-lineActive text-gold' : 'border-line bg-card text-t2 hover:text-gold'
             }`}
           >
@@ -61,7 +61,7 @@ export default async function ScreenPage({
             <Link
               key={s.key}
               href={`/screen?sleeve=${s.key}`}
-              className={`border px-3 py-1.5 text-[12px] font-medium ${
+              className={`shrink-0 border px-3 py-1.5 text-[12px] font-medium ${
                 sleeve?.key === s.key
                   ? 'border-lineActive text-gold'
                   : 'border-line bg-card text-t2 hover:text-gold'
@@ -73,7 +73,7 @@ export default async function ScreenPage({
         </div>
       </div>
 
-      <div className="panel grid grid-cols-2 divide-x divide-line md:grid-cols-4">
+      <div className="panel stat-grid md:grid-cols-4">
         <Stat label="Holdings screened" value={String(tickers.length)} sub={`${scored.length} with usable estimates`} />
         <Stat
           label={`Clear ${(hurdle * 100).toFixed(0)}%`}
@@ -96,7 +96,7 @@ export default async function ScreenPage({
       <Panel
         eyebrow="Ranked"
         title="Expected 3-year total return"
-        subtitle="Exit multiple = most conservative anchor"
+        subtitle="Exit multiple = median of the company's own P/E history"
       >
         <ScreenTable rows={rows} hurdle={hurdle} />
       </Panel>

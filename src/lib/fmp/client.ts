@@ -1,6 +1,9 @@
 import 'server-only';
 
-const BASE = 'https://financialmodelingprep.com/stable';
+// A local stand-in can be pointed at in development; production always hits FMP.
+const BASE =
+  (process.env.NODE_ENV !== 'production' && process.env.FMP_BASE_URL) ||
+  'https://financialmodelingprep.com/stable';
 
 /** Per-endpoint cache lifetimes, in seconds. Fundamentals move quarterly; quotes move constantly. */
 export const TTL = {

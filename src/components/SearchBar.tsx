@@ -81,9 +81,9 @@ export function SearchBar() {
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => results.length && setOpen(true)}
         onKeyDown={onKeyDown}
-        placeholder="Search ticker or company…"
+        placeholder="Search ticker or company"
         aria-label="Search for a stock"
-        className="w-full border border-line bg-surface px-3 py-1.5 text-[13px] text-t1 outline-none placeholder:text-t3 focus:border-lineActive"
+        className="w-full border border-line bg-surface px-3 py-2 text-[16px] text-t1 outline-none placeholder:text-t3 focus:border-lineActive sm:py-1.5 sm:text-[13px]"
       />
       {open && results.length > 0 && (
         <ul className="absolute left-0 right-0 top-full z-40 mt-1 max-h-80 overflow-auto border border-line bg-card py-1 shadow-xl">
@@ -92,7 +92,7 @@ export function SearchBar() {
               <button
                 onClick={() => go(r.symbol)}
                 onMouseEnter={() => setActive(i)}
-                className={`flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-[13px] ${
+                className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-[13px] sm:py-1.5 ${
                   i === active ? 'bg-gold/[0.15]' : ''
                 }`}
               >

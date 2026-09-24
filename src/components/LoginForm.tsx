@@ -105,7 +105,7 @@ export function LoginForm({ next }: { next?: string }) {
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
           aria-label="Email address"
-          className="w-full border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-t3 focus:border-lineActive"
+          className="field"
         />
         <input
           type="password"
@@ -115,12 +115,12 @@ export function LoginForm({ next }: { next?: string }) {
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
           aria-label="Password"
-          className="w-full border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-t3 focus:border-lineActive"
+          className="field"
         />
         <button
           type="submit"
           disabled={stage === 'signing-in'}
-          className="w-full bg-gold px-3 py-2 text-[13px] font-semibold text-bg disabled:opacity-60"
+          className="w-full bg-gold px-3 py-2.5 text-[14px] font-semibold text-bg transition-opacity hover:opacity-90 disabled:opacity-60 sm:py-2 sm:text-[13px]"
         >
           {stage === 'signing-in' ? 'Signing in…' : 'Sign in'}
         </button>
@@ -159,7 +159,7 @@ export function LoginForm({ next }: { next?: string }) {
         <button
           type="submit"
           disabled={stage === 'verifying'}
-          className="w-full bg-gold px-3 py-2 text-[13px] font-semibold text-bg disabled:opacity-60"
+          className="w-full bg-gold px-3 py-2.5 text-[14px] font-semibold text-bg transition-opacity hover:opacity-90 disabled:opacity-60 sm:py-2 sm:text-[13px]"
         >
           {stage === 'verifying' ? 'Signing in…' : 'Sign in'}
         </button>
@@ -189,12 +189,12 @@ export function LoginForm({ next }: { next?: string }) {
         onChange={(e) => setEmail(e.target.value)}
         placeholder="you@example.com"
         aria-label="Email address"
-        className="w-full border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-t3 focus:border-lineActive"
+        className="field"
       />
       <button
         type="submit"
         disabled={stage === 'sending'}
-        className="w-full bg-gold px-3 py-2 text-[13px] font-semibold text-bg disabled:opacity-60"
+        className="w-full bg-gold px-3 py-2.5 text-[14px] font-semibold text-bg transition-opacity hover:opacity-90 disabled:opacity-60 sm:py-2 sm:text-[13px]"
       >
         {stage === 'sending' ? 'Sending…' : 'Email me a code'}
       </button>

@@ -21,6 +21,10 @@ export default {
 
         // Gold-tinted hairlines, the brand's signature division.
         line: 'rgba(201,168,76,0.12)',
+        // Row separators inside a panel, a step quieter than the panel's own edge.
+        // (An opacity modifier on an rgba token replaces its alpha, so line/60
+        // would render five times stronger than the hairline it is meant to soften.)
+        hairline: 'rgba(201,168,76,0.07)',
         lineHover: 'rgba(201,168,76,0.24)',
         lineActive: 'rgba(201,168,76,0.40)',
 
@@ -54,8 +58,8 @@ export default {
       },
       letterSpacing: {
         // The signature letterspaced label from the brand guide.
-        label: '0.18em',
-        eyebrow: '0.28em',
+        label: '0.14em',
+        eyebrow: '0.22em',
       },
       borderRadius: {
         none: '0',

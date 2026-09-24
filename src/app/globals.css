@@ -6,9 +6,21 @@
   color-scheme: dark;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  background: #171738;
+}
+
 body {
   @apply bg-bg font-sans text-t1 antialiased;
   font-feature-settings: 'cv01' on, 'cv02' on;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Keyboard focus is always visible; mouse and touch focus stays quiet. */
+:focus-visible {
+  outline: 1px solid #c9a84c;
+  outline-offset: 2px;
 }
 
 /* Numeric columns must align across rows to be scannable. */
@@ -22,14 +34,27 @@ body {
   .panel {
     @apply border border-line bg-surface;
   }
+  /* Title over subtitle on phones; side by side once there is room. */
   .panel-head {
-    @apply flex items-baseline justify-between gap-3 border-b border-line px-4 py-3;
+    @apply flex flex-col gap-1 border-b border-line px-4 py-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6;
   }
   .panel-title {
     @apply text-[13px] font-semibold tracking-wide text-t1;
   }
   .panel-sub {
-    @apply text-[11px] text-t3;
+    @apply text-[11px] leading-snug text-t3 sm:max-w-[55%] sm:text-right;
+  }
+
+  /*
+   * Stat tiles divided by hairlines. The lines are the gap showing through,
+   * so they stay continuous however the tiles wrap — dividing borders break
+   * wherever a row ends early.
+   */
+  .stat-grid {
+    @apply grid grid-cols-2 gap-px bg-line;
+  }
+  .stat-grid > * {
+    @apply bg-surface;
   }
 
   /*
@@ -47,17 +72,17 @@ body {
     @apply text-[10px] font-semibold uppercase tracking-label text-t4;
   }
   .stat-value {
-    @apply tabular text-[20px] font-semibold text-t1;
+    @apply tabular text-[18px] font-semibold leading-tight text-t1 sm:text-[20px];
   }
 
   .row {
-    @apply flex items-center justify-between gap-4 border-b border-line/60 px-4 py-2 text-[13px] last:border-0;
+    @apply flex items-center justify-between gap-4 border-b border-hairline px-4 py-2.5 text-[13px] last:border-0 sm:py-2;
   }
   .row-label {
     @apply text-t3;
   }
   .row-value {
-    @apply tabular font-medium text-t1;
+    @apply tabular shrink-0 text-right font-medium text-t1;
   }
 
   /* Georgia italic for editorial callouts, per the brand's pull-quote rule. */
@@ -71,8 +96,17 @@ body {
   .btn-primary {
     @apply bg-gold px-3 py-2 text-[13px] font-semibold text-bg transition-opacity hover:opacity-90 disabled:opacity-60;
   }
+  /* 16px on phones: iOS zooms the page into any smaller input on focus. */
   .field {
-    @apply w-full border border-line bg-card px-3 py-2 text-[13px] text-t1 outline-none placeholder:text-t4 focus:border-lineActive;
+    @apply w-full border border-line bg-card px-3 py-2 text-[16px] text-t1 outline-none placeholder:text-t4 focus:border-lineActive sm:text-[13px];
+  }
+}
+
+/* An odd tile out on a two-column phone grid spans the row rather than
+   leaving a blank cell beside it. */
+@media (max-width: 767px) {
+  .stat-grid > :last-child:nth-child(odd) {
+    grid-column: span 2;
   }
 }
 

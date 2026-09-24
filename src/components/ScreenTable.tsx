@@ -49,9 +49,17 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
     }
   }
 
+  const sortOptions: Array<{ key: SortKey; label: string }> = [
+    { key: 'expectedCagr', label: 'Expected CAGR' },
+    { key: 'stretch', label: 'Stretch' },
+    { key: 'requiredExitPe', label: 'Must believe' },
+    { key: 'dividendYield', label: 'Yield' },
+    { key: 'symbol', label: 'Ticker' },
+  ];
+
   return (
     <>
-      <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line px-4 py-2.5">
         <label className="flex cursor-pointer items-center gap-2 text-[12px] text-t3">
           <input
             type="checkbox"
@@ -61,10 +69,84 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
           />
           Only show holdings clearing {pct(hurdle, 0)}
         </label>
-        <span className="text-[11px] text-t4">{sorted.length} rows</span>
+        <div className="flex items-center gap-3">
+          {/* Phones have no column headers to tap, so sorting gets its own control. */}
+          <label className="flex items-center gap-2 text-[11px] text-t4 md:hidden">
+            Sort
+            <select
+              value={`${sort}:${descending ? 'desc' : 'asc'}`}
+              onChange={(e) => {
+                const [key, dir] = e.target.value.split(':');
+                setSort(key as SortKey);
+                setDescending(dir === 'desc');
+              }}
+              className="border border-line bg-card px-2 py-1.5 text-[16px] text-t1 outline-none sm:text-[12px]"
+            >
+              {sortOptions.flatMap((o) => [
+                <option key={`${o.key}:desc`} value={`${o.key}:desc`}>
+                  {o.label} {o.key === 'symbol' ? 'Z–A' : 'high–low'}
+                </option>,
+                <option key={`${o.key}:asc`} value={`${o.key}:asc`}>
+                  {o.label} {o.key === 'symbol' ? 'A–Z' : 'low–high'}
+                </option>,
+              ])}
+            </select>
+          </label>
+          <span className="text-[11px] text-t4">{sorted.length} rows</span>
+        </div>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* Phones: one line per holding, the return first and the working beneath. */}
+      <ul className="md:hidden">
+        {sorted.map((r) => {
+          const sleeves = sleevesHolding(r.symbol);
+          return (
+            <li key={r.symbol} className="border-b border-hairline last:border-0">
+              <Link href={`/stock/${r.symbol}`} className="block px-4 py-3 active:bg-card">
+                <div className="flex items-baseline justify-between gap-3">
+                  <div className="flex min-w-0 items-baseline gap-2">
+                    <span className="text-[14px] font-semibold text-t1">{r.symbol}</span>
+                    <span className="tabular text-[12px] text-t3">
+                      {r.price !== null ? money(r.price) : '—'}
+                    </span>
+                  </div>
+                  <span
+                    className={`tabular shrink-0 text-[15px] font-semibold ${
+                      r.expectedCagr === null
+                        ? 'text-t4'
+                        : r.clearsHurdle
+                          ? 'text-up'
+                          : 'text-dn'
+                    }`}
+                  >
+                    {r.expectedCagr !== null ? signedPct(r.expectedCagr) : '—'}
+                  </span>
+                </div>
+                {r.expectedCagr !== null ? (
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] tabular-nums text-t4">
+                    <span>
+                      {num(r.epsAtHorizon)} EPS FY{r.horizonFiscalYear}
+                      {r.analystCount > 0 && r.analystCount < 3 && (
+                        <span className="text-dn"> ({r.analystCount})</span>
+                      )}
+                    </span>
+                    <span>× {multiple(r.exitPe)}</span>
+                    <span>needs {multiple(r.requiredExitPe)}</span>
+                    {r.dividendYield > 0 && <span>{pct(r.dividendYield)} yield</span>}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-[11px] text-t4">{r.note ?? 'Not scored'}</p>
+                )}
+                <p className="mt-1 truncate text-[10px] uppercase tracking-label text-t4/80">
+                  {sleeves.map((s) => s.name).join(' · ')}
+                </p>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[900px] text-[12px]">
           <thead>
             <tr className="border-b border-line">
@@ -95,7 +177,7 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
             {sorted.map((r) => {
               const sleeves = sleevesHolding(r.symbol);
               return (
-                <tr key={r.symbol} className="border-b border-line/50 hover:bg-card">
+                <tr key={r.symbol} className="border-b border-hairline hover:bg-card">
                   <td className="px-3 py-2">
                     <Link href={`/stock/${r.symbol}`} className="font-semibold text-t1 hover:text-gold">
                       {r.symbol}

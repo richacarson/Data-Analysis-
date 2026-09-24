@@ -65,7 +65,7 @@ export function SetPassword() {
         onChange={(e) => setPassword(e.target.value)}
         placeholder="New password"
         aria-label="New password"
-        className="w-full border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-t3 focus:border-lineActive"
+        className="field"
       />
       <input
         type="password"
@@ -75,12 +75,12 @@ export function SetPassword() {
         onChange={(e) => setConfirm(e.target.value)}
         placeholder="Confirm password"
         aria-label="Confirm password"
-        className="w-full border border-line bg-card px-3 py-2 text-[13px] outline-none placeholder:text-t3 focus:border-lineActive"
+        className="field"
       />
       <button
         type="submit"
         disabled={state === 'saving'}
-        className="w-full bg-gold px-3 py-2 text-[13px] font-semibold text-bg disabled:opacity-60"
+        className="w-full bg-gold px-3 py-2.5 text-[14px] font-semibold text-bg transition-opacity hover:opacity-90 disabled:opacity-60 sm:py-2 sm:text-[13px]"
       >
         {state === 'saving' ? 'Saving…' : 'Set password'}
       </button>

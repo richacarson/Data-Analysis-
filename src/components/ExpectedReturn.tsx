@@ -92,7 +92,7 @@ export function ExpectedReturnPanel({
           <p className="mt-2 text-[12px] leading-relaxed text-t3">{expected.disagreementNote}</p>
         </div>
       )}
-      <div className="grid grid-cols-2 divide-x divide-line border-b border-line md:grid-cols-4">
+      <div className="stat-grid border-b border-line md:grid-cols-4">
         <Stat
           label="Expected CAGR"
           value={pct(result.totalCagr)}
@@ -155,7 +155,7 @@ export function ExpectedReturnPanel({
               Analyst earnings range against an exit multiple 20% either side of the anchor.
             </p>
           </div>
-          <div className="grid grid-cols-2 divide-x divide-line border-t border-line md:grid-cols-4">
+          <div className="stat-grid border-t border-line md:grid-cols-4">
             <Stat
               label="Clears hurdle"
               value={pct(scenarios.hitRate, 0)}

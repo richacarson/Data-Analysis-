@@ -19,6 +19,7 @@ import {
   nonNegativeRatio,
   num,
   pct,
+  roundMoney,
   signedPct,
 } from '@/lib/format';
 
@@ -124,33 +125,35 @@ export default async function StockPage({
 
       {/* ---- Company header ---- */}
       <div className="panel">
-        <div className="flex flex-wrap items-start justify-between gap-5 px-5 py-4">
-          <div className="flex items-start gap-3.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={profile.image}
-              alt=""
-              className="h-12 w-12 border border-line bg-card object-contain p-1.5"
-            />
-            <div>
+        <div className="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6 sm:px-5">
+          <div className="flex min-w-0 items-start gap-3.5">
+            {profile.image ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={profile.image}
+                alt=""
+                className="h-11 w-11 shrink-0 border border-line bg-t1 object-contain p-1 sm:h-12 sm:w-12"
+              />
+            ) : null}
+            <div className="min-w-0">
               <p className="eyebrow">
                 {profile.exchange} · {report.symbol}
               </p>
-              <h1 className="mt-1 font-serif text-[24px] leading-tight tracking-tight text-t1">
+              <h1 className="mt-1 font-serif text-[21px] leading-tight tracking-tight text-t1 sm:text-[24px]">
                 {profile.companyName}
               </h1>
               <p className="mt-1 text-[12px] text-t4">
-                {profile.sector} · {profile.industry} · {profile.country}
+                {[profile.sector, profile.industry, profile.country].filter(Boolean).join(' · ')}
               </p>
             </div>
           </div>
-          <div className="text-right">
-            <p className="eyebrow-muted">Last price</p>
-            <div className="tabular mt-1 text-[28px] font-semibold leading-none text-t1">
+          <div className="flex items-baseline gap-3 border-t border-line pt-3 sm:block sm:shrink-0 sm:border-0 sm:pt-0 sm:text-right">
+            <p className="eyebrow-muted hidden sm:block">Last price</p>
+            <div className="tabular text-[26px] font-semibold leading-none text-t1 sm:mt-1 sm:text-[28px]">
               {money(report.price, currency)}
             </div>
             <div
-              className={`tabular mt-1.5 text-[13px] ${profile.change >= 0 ? 'text-up' : 'text-dn'}`}
+              className={`tabular text-[13px] sm:mt-1.5 ${profile.change >= 0 ? 'text-up' : 'text-dn'}`}
             >
               {profile.change >= 0 ? '+' : ''}
               {num(profile.change)} ({signedPct(profile.changePercentage / 100)})
@@ -162,7 +165,7 @@ export default async function StockPage({
       </div>
 
       {/* ---- Verdict strip ---- */}
-      <div className="panel grid grid-cols-2 divide-x divide-line md:grid-cols-5">
+      <div className="panel stat-grid md:grid-cols-5">
         <Stat
           label={`Expected ${report.expectedReturn.horizonYears}y CAGR`}
           value={report.expectedReturn.result ? pct(report.expectedReturn.result.totalCagr) : '—'}
@@ -182,7 +185,7 @@ export default async function StockPage({
           label="Fair value range"
           value={
             report.valueRange.low !== null
-              ? `${money(report.valueRange.low, currency)} – ${money(report.valueRange.high!, currency)}`
+              ? `${roundMoney(report.valueRange.low, currency)} – ${roundMoney(report.valueRange.high!, currency)}`
               : '—'
           }
           sub={
@@ -248,13 +251,14 @@ export default async function StockPage({
           />
           <div className="border-t border-line">
             <Row
-              label="Analyst low / consensus / high"
+              label="Analyst targets"
+              hint="Low · consensus · high"
               value={
                 consensus.priceTarget
-                  ? `${money(consensus.priceTarget.targetLow, currency)} · ${money(
+                  ? `${roundMoney(consensus.priceTarget.targetLow, currency)} · ${roundMoney(
                       consensus.priceTarget.targetConsensus,
                       currency,
-                    )} · ${money(consensus.priceTarget.targetHigh, currency)}`
+                    )} · ${roundMoney(consensus.priceTarget.targetHigh, currency)}`
                   : '—'
               }
             />
@@ -262,8 +266,11 @@ export default async function StockPage({
         </Panel>
 
         {/* ---- Reverse DCF ---- */}
-        <Panel eyebrow="What is priced in"
-          title="Reverse DCF" subtitle="What is priced in?">
+        <Panel
+          eyebrow="What is priced in"
+          title="Reverse DCF"
+          subtitle={`Growth implied by ${money(report.price, currency)}`}
+        >
           <div className="border-b border-line px-4 py-4">
             {reverseUsable ? (
               <p className="pullquote">
@@ -323,7 +330,7 @@ export default async function StockPage({
         } earnings`}
       >
         <EpsProjectionChart data={epsChartData} />
-        <div className="grid grid-cols-2 divide-x divide-line border-t border-line md:grid-cols-4">
+        <div className="stat-grid border-t border-line md:grid-cols-4">
           <Stat label="Bear (analyst low)" value={money(models.earningsDcf.bearFairValue, currency)} />
           <Stat
             label="Base (consensus)"
@@ -583,7 +590,7 @@ export default async function StockPage({
       <Panel eyebrow="Track record"
           title="Reported history" subtitle="Revenue, net income and free cash flow">
         <HistoryChart data={historyData} />
-        <div className="grid grid-cols-2 divide-x divide-line border-t border-line md:grid-cols-4">
+        <div className="stat-grid border-t border-line md:grid-cols-4">
           <Stat label="Revenue CAGR (5y)" value={pct(growth.revenueCagr5y)} tone={growth.revenueCagr5y} />
           <Stat label="EPS CAGR (5y)" value={pct(growth.epsCagr5y)} tone={growth.epsCagr5y} />
           <Stat label="FCF CAGR (5y)" value={pct(growth.historicalFcfCagr)} tone={growth.historicalFcfCagr} />

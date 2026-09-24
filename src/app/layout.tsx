@@ -1,9 +1,7 @@
-import type { Metadata } from 'next';
-import Link from 'next/link';
+import type { Metadata, Viewport } from 'next';
 import { DM_Sans, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
-import { SearchBar } from '@/components/SearchBar';
-import { UserMenu } from '@/components/UserMenu';
+import { AppHeader, MobileTabBar } from '@/components/AppChrome';
 
 // The same pairing the Paradiem Dashboard uses.
 const dmSans = DM_Sans({
@@ -23,46 +21,50 @@ const plexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: 'Equity Lens — Paradiem',
   description:
-    'Discounted cash flow, reverse DCF, growth-adjusted multiples and quality scoring.',
+    'Paradiem equity research: expected returns, valuation models and sleeve screens.',
+  applicationName: 'Equity Lens',
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' },
+    ],
+    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180' }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: 'Equity Lens',
+    statusBarStyle: 'black-translucent',
+  },
+  formatDetection: { telephone: false },
+  robots: { index: false, follow: false },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#171738',
+  colorScheme: 'dark',
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${dmSans.variable} ${plexMono.variable}`}>
       <body>
-        <header className="sticky top-0 z-30 border-b border-line bg-bg/95 backdrop-blur">
-          <div className="mx-auto flex max-w-[1400px] items-center gap-5 px-5 py-3">
-            <Link href="/" className="flex shrink-0 items-baseline gap-2.5">
-              <span className="font-serif text-[19px] leading-none tracking-tight text-t1">
-                Equity Lens
-              </span>
-              <span className="hidden text-[10px] font-semibold uppercase tracking-eyebrow text-gold sm:inline">
-                Paradiem
-              </span>
-            </Link>
-            <nav className="hidden shrink-0 items-center gap-4 md:flex">
-              <Link
-                href="/screen"
-                className="text-[12px] font-medium text-t3 transition-colors hover:text-gold"
-              >
-                Screen
-              </Link>
-            </nav>
-            <SearchBar />
-            <UserMenu />
-          </div>
-        </header>
+        <AppHeader />
 
-        <main className="mx-auto max-w-[1400px] px-5 py-6">{children}</main>
+        <main className="mx-auto max-w-[1400px] px-3 py-4 sm:px-5 sm:py-6">{children}</main>
 
-        <footer className="mx-auto max-w-[1400px] border-t border-line px-5 py-6">
+        <footer className="mx-auto max-w-[1400px] border-t border-line px-3 pb-24 pt-5 sm:px-5 md:pb-8">
           <p className="eyebrow-muted">Paradiem · Wealth beyond today</p>
-          <p className="mt-2 max-w-3xl text-[11px] leading-relaxed text-t3">
+          <p className="mt-2 max-w-3xl text-[11px] leading-relaxed text-t4">
             Data from Financial Modeling Prep. Valuation models are estimates built on
             assumptions shown alongside each figure — they are research tools, not investment
             advice.
           </p>
         </footer>
+
+        <MobileTabBar />
       </body>
     </html>
   );

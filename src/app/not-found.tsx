@@ -4,8 +4,8 @@ export const metadata = { title: 'Not found — Equity Lens' };
 
 export default function NotFound() {
   return (
-    <div className="mx-auto max-w-md py-20">
-      <div className="panel px-6 py-7">
+    <div className="mx-auto max-w-md py-8 sm:py-20">
+      <div className="panel px-5 py-6 sm:px-6 sm:py-7">
         <p className="eyebrow">Error 404</p>
         <h1 className="mt-2 font-serif text-[22px] tracking-tight text-t1">
           That page doesn&apos;t exist
