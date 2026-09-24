@@ -19,37 +19,57 @@ export interface QuarterlyEarnings {
 }
 
 export interface AnnualAdjustedEps {
-  /** Calendar year the four quarters fall in; fiscal years rarely align exactly. */
+  /** The company's fiscal year label. */
   year: string;
   adjustedEps: number;
   quarters: number;
 }
 
-/**
- * Annual adjusted EPS, summed from reported quarters.
- *
- * Only complete years are returned: three quarters summed and labelled annual
- * would understate earnings by roughly a quarter and look like a collapse.
- */
-export function annualAdjustedEps(quarters: QuarterlyEarnings[]): AnnualAdjustedEps[] {
-  const byYear = new Map<string, number[]>();
+const DAY = 24 * 60 * 60 * 1000;
 
-  for (const q of quarters) {
-    if (q.epsActual === null || !Number.isFinite(q.epsActual)) continue;
-    const year = q.date.slice(0, 4);
-    const bucket = byYear.get(year) ?? [];
-    bucket.push(q.epsActual);
-    byYear.set(year, bucket);
+/**
+ * Annual adjusted EPS, summed from reported quarters and grouped by fiscal year.
+ *
+ * Grouping by the calendar year of the report date is wrong for everyone: the
+ * fourth quarter is always reported in the following year. Stanley Black &
+ * Decker's FY2025 is 0.75 + 1.08 + 1.43 + 1.41 = $4.67, the last of those
+ * reported in February 2026; a calendar grouping sums February 2025's FY2024
+ * quarter instead and pairs it with the wrong year-end price.
+ *
+ * The fourth quarter of a fiscal year is the first report after that year
+ * ends, and the three reports before it complete the year. Only complete years
+ * are returned: three quarters summed and labelled annual would understate
+ * earnings by a quarter and look like a collapse.
+ */
+export function annualAdjustedEps(
+  quarters: QuarterlyEarnings[],
+  fiscalYearEnds: Array<{ date: string; fiscalYear: string }>,
+): AnnualAdjustedEps[] {
+  const reports = [...quarters].sort((a, b) => a.date.localeCompare(b.date));
+  const result: AnnualAdjustedEps[] = [];
+
+  for (const fy of fiscalYearEnds) {
+    const end = Date.parse(fy.date);
+    const q4Index = reports.findIndex((r) => r.date > fy.date);
+    if (q4Index < 3) continue;
+    // A first report more than 100 days after year end means Q4 is missing.
+    if (Date.parse(reports[q4Index].date) - end > 100 * DAY) continue;
+
+    const year = reports.slice(q4Index - 3, q4Index + 1);
+    const values = year.map((r) => r.epsActual);
+    if (values.some((v) => v === null || !Number.isFinite(v))) continue;
+    // Four reports should span roughly nine months; a gap means a missing quarter.
+    const span = Date.parse(year[3].date) - Date.parse(year[0].date);
+    if (span < 230 * DAY || span > 320 * DAY) continue;
+
+    result.push({
+      year: fy.fiscalYear,
+      adjustedEps: (values as number[]).reduce((sum, v) => sum + v, 0),
+      quarters: 4,
+    });
   }
 
-  return [...byYear.entries()]
-    .filter(([, values]) => values.length === 4)
-    .map(([year, values]) => ({
-      year,
-      adjustedEps: values.reduce((sum, v) => sum + v, 0),
-      quarters: values.length,
-    }))
-    .sort((a, b) => a.year.localeCompare(b.year));
+  return result.sort((a, b) => a.year.localeCompare(b.year));
 }
 
 export interface BasisGap {

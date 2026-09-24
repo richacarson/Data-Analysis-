@@ -68,11 +68,12 @@ export interface EpsPoint {
 export function epsActualVsEstimate(
   reported: Array<{ fiscalYear: string; epsDiluted: number }>,
   estimates: Array<{ date: string; epsAvg: number; epsLow: number; epsHigh: number }>,
+  fiscalYearOf: (date: string) => string = (date) => date.slice(0, 4),
 ): EpsPoint[] {
   const byYear = new Map<string, EpsPoint>();
 
   for (const e of estimates) {
-    const year = e.date.slice(0, 4);
+    const year = fiscalYearOf(e.date);
     if (!Number.isFinite(e.epsAvg)) continue;
     byYear.set(year, { year, eps: e.epsAvg, actual: false, low: e.epsLow, high: e.epsHigh });
   }

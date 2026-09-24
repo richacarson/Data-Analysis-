@@ -16,7 +16,7 @@ import {
   getRiskFreeRate,
 } from '../fmp/endpoints';
 import { discountedCashFlow, sensitivityGrid, type DcfAssumptions } from './dcf';
-import { earningsDcf, fcfConversionRatio } from './earnings-dcf';
+import { adjustedFcfConversion, earningsDcf, fcfConversionRatio } from './earnings-dcf';
 import {
   cagr,
   earningsPowerValue,
@@ -41,6 +41,7 @@ import {
 import { exitMultipleAnchors, median } from './exit-multiple';
 import { fairValueRange, grahamIsInformative } from './blend';
 import { latestCapexSplit } from './capex';
+import { fiscalYearLabeler, forwardEstimates, pickHorizon } from './fiscal';
 import {
   adjustedPeHistory,
   annualAdjustedEps,
@@ -201,8 +202,15 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
   const epsCagr5y =
     income.length > 5 ? cagr(income[5].epsDiluted, income[0].epsDiluted, 5) : null;
 
+  // Every annual record is labelled with the company's own fiscal year, never
+  // the calendar year of its period end.
+  const fiscalYearOf = fiscalYearLabeler(
+    income.map((i) => ({ date: i.date, fiscalYear: i.fiscalYear })),
+  );
+
   // Analyst-implied forward growth takes precedence over extrapolated history.
-  const sortedEstimates = [...estimates].sort((a, b) => a.date.localeCompare(b.date));
+  // The estimates feed includes years already reported; only the rest are forecasts.
+  const sortedEstimates = forwardEstimates(estimates, latestIncome?.date ?? null);
   const firstEstimate = sortedEstimates[0];
   const lastEstimate = sortedEstimates[sortedEstimates.length - 1];
   const forwardEpsCagr =
@@ -280,28 +288,6 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
   const bridge = { netDebt, sharesOutstanding: shares };
   const fcfDcf = discountedCashFlow(baseFcf, dcfAssumptions, bridge);
 
-  // ---- Model 2: earnings-projection DCF -----------------------------------
-  const conversion = overrides.fcfConversion ?? fcfConversionRatio(fcfHistory);
-  const epsDcf = earningsDcf(
-    estimates.map((e) => ({
-      date: e.date,
-      epsAvg: e.epsAvg,
-      epsLow: e.epsLow,
-      epsHigh: e.epsHigh,
-      netIncomeAvg: e.netIncomeAvg,
-      revenueAvg: e.revenueAvg,
-      numAnalystsEps: e.numAnalystsEps,
-    })),
-    {
-      discountRate: capital.costOfEquity,
-      fcfConversion: conversion,
-      fadeYears: 5,
-      postEstimateGrowth: clamp(seedGrowth * 0.6, 0.01, 0.12),
-      terminalGrowth,
-    },
-    latestIncome?.epsDiluted ?? 0,
-  );
-
   // ---- Model 3: reverse DCF ------------------------------------------------
   const reverse = reverseDcf(baseFcf, dcfAssumptions, bridge, price);
   // Bisection reports non-convergence by returning the bound it gave up at.
@@ -369,12 +355,10 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
   const hurdle = overrides.hurdle ?? DEFAULT_HURDLE;
   const dividendYield = ratios?.dividendYieldTTM ?? 0;
 
-  // The estimate closest to the horizon, not simply the furthest one published.
-  const targetFiscalYear = new Date().getFullYear() + horizonYears;
-  const horizonEstimate =
-    sortedEstimates.find((e) => Number(e.date.slice(0, 4)) >= targetFiscalYear) ??
-    sortedEstimates[sortedEstimates.length - 1] ??
-    null;
+  // The forecast year ending closest to the horizon, and the real time to it.
+  const horizon = pickHorizon(sortedEstimates, horizonYears);
+  const horizonEstimate = horizon?.estimate ?? null;
+  const yearsToHorizon = horizon?.years ?? horizonYears;
 
   /*
    * Consensus is quoted on an adjusted basis, so the historical multiple has to
@@ -384,14 +368,17 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
    * consensus, so a GAAP-anchored multiple applied to a consensus forecast
    * roughly doubles the target price.
    */
-  const adjustedEpsYears = annualAdjustedEps(earningsHistory);
+  const adjustedEpsYears = annualAdjustedEps(
+    earningsHistory,
+    income.map((i) => ({ date: i.date, fiscalYear: i.fiscalYear })),
+  );
   const basis = compareBases(
     income.map((i) => ({ fiscalYear: i.fiscalYear, epsDiluted: i.epsDiluted })),
     adjustedEpsYears,
   );
 
   const adjustedPes = adjustedPeHistory(
-    enterprise.map((ev) => ({ year: ev.date.slice(0, 4), price: ev.stockPrice })),
+    enterprise.map((ev) => ({ year: fiscalYearOf(ev.date), price: ev.stockPrice })),
     adjustedEpsYears,
   );
 
@@ -399,6 +386,56 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
   const ownPeHistory =
     adjustedPes.length >= 3 ? adjustedPes : annualRatios.map((r) => r.priceToEarningsRatio);
   const peBasis: 'adjusted' | 'gaap' = adjustedPes.length >= 3 ? 'adjusted' : 'gaap';
+  const latestAdjustedEps =
+    peBasis === 'adjusted' ? adjustedEpsYears[adjustedEpsYears.length - 1]?.adjustedEps ?? null : null;
+
+  // ---- Model 2: earnings-projection DCF -----------------------------------
+  /*
+   * Consensus is adjusted EPS, so the cash conversion applied to it has to be
+   * measured against adjusted earnings too. Stanley Black & Decker converts
+   * roughly all of its adjusted earnings to cash but nearly twice its GAAP
+   * earnings; the GAAP ratio, clamped, applied to adjusted forecasts is simply
+   * the wrong number.
+   */
+  const adjustedByYear = new Map(adjustedEpsYears.map((a) => [a.year, a.adjustedEps]));
+  const adjustedConversion =
+    peBasis === 'adjusted'
+      ? adjustedFcfConversion(
+          cashflow.map((c) => {
+            const inc = income.find((i) => i.date === c.date);
+            const dilutedShares = inc?.weightedAverageShsOutDil ?? 0;
+            return {
+              fcfPerShare: dilutedShares > 0 ? c.freeCashFlow / dilutedShares : Number.NaN,
+              adjustedEps: adjustedByYear.get(fiscalYearOf(c.date)) ?? Number.NaN,
+            };
+          }),
+        )
+      : null;
+  const conversion =
+    overrides.fcfConversion ?? adjustedConversion ?? fcfConversionRatio(fcfHistory);
+  const conversionBasis: 'adjusted' | 'gaap' =
+    overrides.fcfConversion === undefined && adjustedConversion !== null ? 'adjusted' : 'gaap';
+  const epsDcf = earningsDcf(
+    sortedEstimates.map((e) => ({
+      date: e.date,
+      label: fiscalYearOf(e.date),
+      epsAvg: e.epsAvg,
+      epsLow: e.epsLow,
+      epsHigh: e.epsHigh,
+      netIncomeAvg: e.netIncomeAvg,
+      revenueAvg: e.revenueAvg,
+      numAnalystsEps: e.numAnalystsEps,
+    })),
+    {
+      discountRate: capital.costOfEquity,
+      fcfConversion: conversion,
+      fadeYears: 5,
+      postEstimateGrowth: clamp(seedGrowth * 0.6, 0.01, 0.12),
+      terminalGrowth,
+    },
+    latestAdjustedEps ?? latestIncome?.epsDiluted ?? 0,
+  );
+
 
   // Industry P/E arrives per exchange per day; reduce to one number.
   let industryPeNow: number | null = null;
@@ -437,6 +474,10 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     industryPe: industryPeNow,
     industryMedian: industryPeMedian,
     justified: justifiedPe,
+    industryNotComparable:
+      peBasis === 'adjusted' && basis.materialGap && basis.medianRatio
+        ? `Excluded: industry multiples are computed on GAAP earnings, and this company's adjusted earnings run ${basis.medianRatio.toFixed(2)}x GAAP. Applied to adjusted consensus they would overstate the exit price.`
+        : null,
   });
 
   const exitPe = overrides.exitPe ?? anchors.recommended ?? null;
@@ -449,13 +490,13 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
           epsAtHorizon,
           exitMultiple: exitPe,
           dividendYield,
-          years: horizonYears,
+          years: yearsToHorizon,
         })
       : null;
 
   const mustBelieve =
     epsAtHorizon !== null && unitsComparable
-      ? requiredExitMultiple(price, epsAtHorizon, hurdle, dividendYield, horizonYears)
+      ? requiredExitMultiple(price, epsAtHorizon, hurdle, dividendYield, yearsToHorizon)
       : null;
 
   const scenarios =
@@ -469,7 +510,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
           ],
           [exitPe * 0.8, exitPe, exitPe * 1.2],
           dividendYield,
-          horizonYears,
+          yearsToHorizon,
           hurdle,
         )
       : null;
@@ -485,9 +526,14 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     })),
   );
 
+  // Bars on one basis: adjusted actuals beside adjusted consensus where the
+  // adjusted history exists, or a GAAP-to-adjusted jump reads as growth.
   const epsSeries = epsActualVsEstimate(
-    income.map((i) => ({ fiscalYear: i.fiscalYear, epsDiluted: i.epsDiluted })),
+    peBasis === 'adjusted'
+      ? adjustedEpsYears.map((a) => ({ fiscalYear: a.year, epsDiluted: a.adjustedEps }))
+      : income.map((i) => ({ fiscalYear: i.fiscalYear, epsDiluted: i.epsDiluted })),
     sortedEstimates,
+    fiscalYearOf,
   );
 
   const segmentSeries = revenueBySegment(
@@ -500,7 +546,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     [...enterprise]
       .sort((a, b) => a.date.localeCompare(b.date))
       .map((ev) => ({
-        year: ev.date.slice(0, 4),
+        year: fiscalYearOf(ev.date),
         price: ev.stockPrice,
         fundamental:
           cashflow.find((c) => c.date === ev.date)?.freeCashFlow ?? 0,
@@ -590,7 +636,12 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
 
     models: {
       fcfDcf: { ...fcfDcf, assumptions: dcfAssumptions, baseCashFlow: baseFcf },
-      earningsDcf: { ...epsDcf, fcfConversion: conversion, discountRate: capital.costOfEquity },
+      earningsDcf: {
+        ...epsDcf,
+        fcfConversion: conversion,
+        conversionBasis,
+        discountRate: capital.costOfEquity,
+      },
       reverseDcf: reverse,
       earningsPower: { total: epv, perShare: epvPerShare },
       grahamNumber: grahamNumber(eps, bookPerShare),
@@ -599,10 +650,11 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
 
     expectedReturn: {
       horizonYears,
+      yearsToHorizon,
       hurdle,
       dividendYield,
       epsAtHorizon,
-      horizonFiscalYear: horizonEstimate?.date.slice(0, 4) ?? null,
+      horizonFiscalYear: horizonEstimate ? fiscalYearOf(horizonEstimate.date) : null,
       analystCount: horizonEstimate?.numAnalystsEps ?? 0,
       exitPe,
       exitPeSource: overrides.exitPe !== undefined ? 'Manual override' : anchors.recommendedSource,
@@ -615,7 +667,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
       sustainableGrowth,
       result: expected,
       requiredExitMultiple: mustBelieve,
-      requiredDiscount: requiredDiscount(hurdle, dividendYield, horizonYears),
+      requiredDiscount: requiredDiscount(hurdle, dividendYield, yearsToHorizon),
       scenarios,
       clearsHurdle: expected ? expected.totalCagr >= hurdle : null,
     },
@@ -655,12 +707,13 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
 
     consensus: {
       priceTarget,
-      estimates: sortedEstimates,
+      estimates: sortedEstimates.map((e) => ({ ...e, fiscalYear: fiscalYearOf(e.date) })),
     },
 
     series: {
       marginTtm: ttm.slice(-20),
       eps: epsSeries,
+      epsBasis: peBasis,
       segments: segmentSeries,
       indexedPriceVsFcf: indexed,
     },

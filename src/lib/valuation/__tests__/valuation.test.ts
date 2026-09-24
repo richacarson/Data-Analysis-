@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { discountedCashFlow, growthPath, sensitivityGrid, type DcfAssumptions } from '../dcf';
 import { reverseDcf } from '../reverse-dcf';
-import { earningsDcf, fcfConversionRatio } from '../earnings-dcf';
+import { earningsDcf, fcfConversionRatio, adjustedFcfConversion } from '../earnings-dcf';
 import { cagr, grahamNumber, ownerEarnings, peg, shareholderYields } from '../multiples';
 import { costOfEquity, impliedCostOfDebt, wacc } from '../wacc';
 
@@ -272,5 +272,26 @@ describe('multiples', () => {
     expect(y.dividendYield).toBeCloseTo(0.015);
     expect(y.buybackYield).toBeCloseTo(0.025);
     expect(y.shareholderYield).toBeCloseTo(0.04);
+  });
+});
+
+describe('adjustedFcfConversion', () => {
+  it('measures cash per dollar of adjusted earnings', () => {
+    const r = adjustedFcfConversion([
+      { fcfPerShare: 4.5, adjustedEps: 4.67 },
+      { fcfPerShare: 5.0, adjustedEps: 4.15 },
+      { fcfPerShare: 4.0, adjustedEps: 4.5 },
+    ]);
+    expect(r).toBeCloseTo(13.5 / 13.32, 3);
+  });
+
+  it('needs three comparable years before replacing the GAAP ratio', () => {
+    expect(
+      adjustedFcfConversion([
+        { fcfPerShare: 4.5, adjustedEps: 4.67 },
+        { fcfPerShare: Number.NaN, adjustedEps: 4.15 },
+        { fcfPerShare: 4.0, adjustedEps: -1 },
+      ]),
+    ).toBeNull();
   });
 });

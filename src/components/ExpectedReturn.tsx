@@ -40,7 +40,7 @@ export function ExpectedReturnPanel({
       title={`${expected.horizonYears}-year total return`}
       subtitle={`FY${expected.horizonFiscalYear} consensus · ${expected.analystCount} ${
         expected.analystCount === 1 ? 'analyst' : 'analysts'
-      }`}
+      } · year ends in ${num(expected.yearsToHorizon, 1)} years`}
     >
       {expected.analystCount > 0 && expected.analystCount < 3 && (
         <div className="border-b border-line bg-dn/[0.08] px-4 py-3">
@@ -137,7 +137,12 @@ export function ExpectedReturnPanel({
         </p>
       </div>
       {anchors.map((a) => (
-        <Row key={a.label} label={a.label} value={multiple(a.value)} hint={a.detail} />
+        <Row
+          key={a.label}
+          label={a.excluded ? `${a.label} (excluded)` : a.label}
+          value={multiple(a.value)}
+          hint={a.detail}
+        />
       ))}
 
       {scenarios && (

@@ -1,6 +1,14 @@
 import 'server-only';
 
-import { getAnnualRatios, getBatchQuotes, getEstimates, getRatiosTTM } from '../fmp/endpoints';
+import {
+  getAnnualRatios,
+  getBatchQuotes,
+  getEarningsHistory,
+  getEstimates,
+  getRatiosTTM,
+} from '../fmp/endpoints';
+import { adjustedPeHistory, annualAdjustedEps } from '../valuation/earnings-basis';
+import { fiscalYearLabeler, forwardEstimates, pickHorizon } from '../valuation/fiscal';
 import { expectedReturn, requiredExitMultiple } from '../valuation/expected-return';
 import { exitMultipleAnchors } from '../valuation/exit-multiple';
 import { DEFAULT_HORIZON_YEARS, DEFAULT_HURDLE } from '../valuation/build';
@@ -54,7 +62,7 @@ async function pooled<T, R>(
  * Expected return for every ticker given.
  *
  * Deliberately lighter than the full valuation: prices arrive in batched calls
- * and each ticker costs three more, so a 154-holding screen is a few hundred
+ * and each ticker costs four more, so a 154-holding screen is a few hundred
  * requests rather than two thousand.
  */
 export async function runScreen(
@@ -75,8 +83,6 @@ export async function runScreen(
     }
   }
 
-  const targetFiscalYear = new Date().getFullYear() + horizonYears;
-
   return pooled(symbols, 12, async (symbol): Promise<ScreenRow> => {
     const base: ScreenRow = {
       symbol,
@@ -96,20 +102,38 @@ export async function runScreen(
     };
 
     try {
-      const [estimates, annual, ttm] = await Promise.all([
+      const [estimates, annual, ttm, earnings] = await Promise.all([
         getEstimates(symbol, 'annual', 10),
         getAnnualRatios(symbol, 10),
         getRatiosTTM(symbol),
+        getEarningsHistory(symbol, 44).catch(() => []),
       ]);
 
-      const sorted = [...estimates].sort((a, b) => a.date.localeCompare(b.date));
-      const horizon =
-        sorted.find((e) => Number(e.date.slice(0, 4)) >= targetFiscalYear) ??
-        sorted[sorted.length - 1] ??
-        null;
+      // Same fiscal-year handling as the stock page, so the two agree.
+      const fiscalYearEnds = annual.map((r) => ({ date: r.date, fiscalYear: r.fiscalYear }));
+      const fiscalYearOf = fiscalYearLabeler(fiscalYearEnds);
+      const lastReported = annual.reduce<string | null>(
+        (latest, r) => (latest === null || r.date > latest ? r.date : latest),
+        null,
+      );
+      const chosen = pickHorizon(forwardEstimates(estimates, lastReported), horizonYears);
+      const horizon = chosen?.estimate ?? null;
+      const years = chosen?.years ?? horizonYears;
 
+      // Consensus is adjusted, so the historical multiple is too where the
+      // quarterly history allows; the ratios feed's P/E is GAAP.
+      const adjustedPes = adjustedPeHistory(
+        annual
+          .filter((r) => r.priceToEarningsRatio * r.netIncomePerShare > 0)
+          .map((r) => ({
+            year: fiscalYearOf(r.date),
+            price: r.priceToEarningsRatio * r.netIncomePerShare,
+          })),
+        annualAdjustedEps(earnings, fiscalYearEnds),
+      );
       const anchors = exitMultipleAnchors({
-        ownHistory: annual.map((r) => r.priceToEarningsRatio),
+        ownHistory:
+          adjustedPes.length >= 3 ? adjustedPes : annual.map((r) => r.priceToEarningsRatio),
       });
 
       const price = base.price;
@@ -127,7 +151,7 @@ export async function runScreen(
             epsAtHorizon: horizon.epsAvg,
             exitMultiple: exitPe,
             dividendYield,
-            years: horizonYears,
+            years,
           })
         : null;
       const required = requiredExitMultiple(
@@ -135,14 +159,14 @@ export async function runScreen(
         horizon.epsAvg,
         hurdle,
         dividendYield,
-        horizonYears,
+        years,
       );
 
       return {
         ...base,
         dividendYield,
         epsAtHorizon: horizon.epsAvg,
-        horizonFiscalYear: horizon.date.slice(0, 4),
+        horizonFiscalYear: fiscalYearOf(horizon.date),
         analystCount: horizon.numAnalystsEps,
         exitPe,
         exitPeSource: anchors.recommendedSource,

@@ -3,6 +3,8 @@ import { clamp } from './wacc';
 export interface EstimateYear {
   /** Fiscal period end. */
   date: string;
+  /** Fiscal year label; the period end's calendar year is often not it. */
+  label?: string;
   epsAvg: number;
   epsLow: number;
   epsHigh: number;
@@ -85,7 +87,7 @@ export function earningsDcf(
     const presentValue = cashFlowPerShare * discountFactor;
 
     years.push({
-      label: est.date.slice(0, 4),
+      label: est.label ?? est.date.slice(0, 4),
       year: period,
       eps: est.epsAvg,
       cashFlowPerShare,
@@ -104,7 +106,10 @@ export function earningsDcf(
   let lastEps = sorted.length ? sorted[sorted.length - 1].epsAvg : currentEps;
   let lastEpsLow = sorted.length ? sorted[sorted.length - 1].epsLow : currentEps;
   let lastEpsHigh = sorted.length ? sorted[sorted.length - 1].epsHigh : currentEps;
-  const finalYearLabel = sorted.length ? Number(sorted[sorted.length - 1].date.slice(0, 4)) : new Date().getFullYear();
+  const finalEstimate = sorted[sorted.length - 1];
+  const finalYearLabel = finalEstimate
+    ? Number(finalEstimate.label ?? finalEstimate.date.slice(0, 4))
+    : new Date().getFullYear();
 
   for (let i = 0; i < assumptions.fadeYears; i++) {
     const t = assumptions.fadeYears === 1 ? 1 : i / (assumptions.fadeYears - 1);
@@ -177,4 +182,23 @@ export function fcfConversionRatio(
   const totalFcf = usable.reduce((sum, h) => sum + h.freeCashFlow, 0);
   if (totalNetIncome <= 0) return 1;
   return clamp(totalFcf / totalNetIncome, 0.3, 2);
+}
+
+/**
+ * Free cash flow per dollar of adjusted earnings, for applying to consensus.
+ *
+ * Measured per share so buybacks do not distort it, over the most recent years
+ * where both figures exist. Same clamp as the GAAP ratio.
+ */
+export function adjustedFcfConversion(
+  history: Array<{ fcfPerShare: number; adjustedEps: number }>,
+  lookback = 5,
+): number | null {
+  const usable = history
+    .filter((h) => Number.isFinite(h.fcfPerShare) && Number.isFinite(h.adjustedEps) && h.adjustedEps > 0)
+    .slice(0, lookback);
+  if (usable.length < 3) return null;
+  const totalEps = usable.reduce((sum, h) => sum + h.adjustedEps, 0);
+  const totalFcf = usable.reduce((sum, h) => sum + h.fcfPerShare, 0);
+  return clamp(totalFcf / totalEps, 0.3, 2);
 }

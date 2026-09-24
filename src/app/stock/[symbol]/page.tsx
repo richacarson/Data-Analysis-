@@ -318,7 +318,9 @@ export default async function StockPage({
         subtitle={`Discounted at cost of equity ${pct(models.earningsDcf.discountRate)} · ${pct(
           models.earningsDcf.fcfConversion,
           0,
-        )} cash conversion`}
+        )} cash conversion on ${
+          models.earningsDcf.conversionBasis === 'adjusted' ? 'adjusted' : 'GAAP'
+        } earnings`}
       >
         <EpsProjectionChart data={epsChartData} />
         <div className="grid grid-cols-2 divide-x divide-line border-t border-line md:grid-cols-4">
@@ -438,8 +440,8 @@ export default async function StockPage({
           <div className="px-4 py-3">
             <Badge tone="flat">
               {report.capexSplit.conservativeMethod === 'greenwald'
-                ? 'The sales-based split gives the lower figure here, and that is the one used elsewhere.'
-                : 'Depreciation gives the lower figure here, and that is the one used elsewhere. The sales-based method reads higher because capital spending is running close to the sales it has already supported.'}
+                ? 'The sales-based split gives the lower figure here. Both are shown for context: the cash flow DCF still starts from reported free cash flow, so it treats all of this spending as a cost.'
+                : 'Depreciation gives the lower figure here; the sales-based method reads higher because capital spending is running close to the sales it has already supported. Both are shown for context: the cash flow DCF still starts from reported free cash flow.'}
             </Badge>
           </div>
         </Panel>
@@ -450,7 +452,11 @@ export default async function StockPage({
         <Panel
           eyebrow="Earnings"
           title="EPS — reported and consensus"
-          subtitle="Hatched bars are analyst estimates"
+          subtitle={`${
+            report.series.epsBasis === 'adjusted'
+              ? 'Adjusted EPS, the basis consensus is quoted on'
+              : 'GAAP diluted EPS'
+          } · hatched bars are analyst estimates`}
         >
           <EpsHistoryChart data={report.series.eps} />
         </Panel>

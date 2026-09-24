@@ -219,6 +219,21 @@ describe('exitMultipleAnchors', () => {
     expect(a.anchorsDisagree).toBe(false);
   });
 
+  it('shows GAAP industry anchors but leaves them out when the bases are not comparable', () => {
+    // SWK: adjusted history near 16x, GAAP industry near 25x.
+    const a = exitMultipleAnchors({
+      ownHistory: [15, 16, 17, 18, 14],
+      industryPe: 24.77,
+      industryMedian: 28.33,
+      justified: 9.24,
+      industryNotComparable: 'Excluded: GAAP basis',
+    });
+    const industry = a.anchors.filter((x) => x.label.startsWith('Industry'));
+    expect(industry.every((x) => x.excluded && x.value !== null)).toBe(true);
+    expect(a.recommendedSource).toBe('Median of 3 anchors');
+    expect(a.recommended!).toBeLessThan(17);
+  });
+
   it('reports no default when nothing is usable', () => {
     const a = exitMultipleAnchors({ ownHistory: [null, -3, 0] });
     expect(a.recommended).toBeNull();

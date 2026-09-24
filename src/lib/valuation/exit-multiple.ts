@@ -12,6 +12,8 @@ export interface MultipleAnchor {
   label: string;
   value: number | null;
   detail: string;
+  /** Shown for reference but left out of the default, with the reason in `detail`. */
+  excluded?: boolean;
 }
 
 export interface ExitMultipleAnchors {
@@ -52,6 +54,12 @@ export interface AnchorInputs {
   industryMedian?: number | null;
   /** P/E justified by returns on capital and growth. */
   justified?: number | null;
+  /**
+   * Set when the industry figures are not comparable to the forecast: they are
+   * computed on GAAP earnings, so for a company whose adjusted earnings run far
+   * above GAAP they overstate the multiple the forecast should carry.
+   */
+  industryNotComparable?: string | null;
 }
 
 /**
@@ -88,13 +96,14 @@ export function exitMultipleAnchors(input: AnchorInputs): ExitMultipleAnchors {
     {
       label: 'Industry now',
       value: input.industryPe ?? null,
-      detail: 'Current industry multiple. Anchoring here imports the sector rating as-is.',
+      detail:
+        'Current industry multiple, on GAAP earnings. Anchoring here imports the sector rating as-is.',
     },
     {
       label: 'Industry median',
       value: input.industryMedian ?? null,
       detail:
-        'The industry against its own recent history, so a sector trading at an extreme is visible rather than inherited.',
+        'The industry over the past year, on GAAP earnings, so a sector trading at an extreme is visible rather than inherited.',
     },
     {
       label: 'Justified by ROIC',
@@ -104,8 +113,18 @@ export function exitMultipleAnchors(input: AnchorInputs): ExitMultipleAnchors {
     },
   ];
 
+  if (input.industryNotComparable) {
+    for (const a of anchors) {
+      if (a.label.startsWith('Industry') && a.value !== null) {
+        a.excluded = true;
+        a.detail = input.industryNotComparable;
+      }
+    }
+  }
+
   const usable = anchors.filter(
-    (a): a is MultipleAnchor & { value: number } => a.value !== null && a.value > 0,
+    (a): a is MultipleAnchor & { value: number } =>
+      !a.excluded && a.value !== null && a.value > 0,
   );
   if (!usable.length) {
     return {

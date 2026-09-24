@@ -17,30 +17,55 @@ const swkQuarters = [
   { date: '2026-11-03', epsActual: null }, // not yet reported
 ];
 
+/** SWK's fiscal years end on the Saturday nearest 31 December. */
+const swkYearEnds = [
+  { date: '2026-01-03', fiscalYear: '2025' },
+  { date: '2024-12-28', fiscalYear: '2024' },
+];
+
 describe('annualAdjustedEps', () => {
-  it('sums four reported quarters into an annual figure', () => {
-    const years = annualAdjustedEps(swkQuarters);
+  it('groups quarters by fiscal year, with Q4 reported after year end', () => {
+    const years = annualAdjustedEps(swkQuarters, swkYearEnds);
     expect(years).toHaveLength(1);
     expect(years[0].year).toBe('2025');
-    expect(years[0].adjustedEps).toBeCloseTo(4.75, 2);
+    // 0.75 + 1.08 + 1.43 + 1.41: Seeking Alpha's FY2025 figure.
+    expect(years[0].adjustedEps).toBeCloseTo(4.67, 2);
   });
 
-  it('refuses a partial year rather than understating it', () => {
-    // 2026 has three reported quarters; summing them would look like a collapse.
-    const years = annualAdjustedEps(swkQuarters);
-    expect(years.find((y) => y.year === '2026')).toBeUndefined();
+  it('does not sum by calendar year of the report date', () => {
+    // That grouping would take February 2025's FY2024 quarter: 4.75.
+    const years = annualAdjustedEps(swkQuarters, swkYearEnds);
+    expect(years[0].adjustedEps).not.toBeCloseTo(4.75, 2);
   });
 
-  it('ignores quarters with no reported figure', () => {
-    const years = annualAdjustedEps([
-      ...swkQuarters.slice(0, 4),
-      { date: '2025-12-31', epsActual: null },
-    ]);
-    expect(years[0].quarters).toBe(4);
+  it('refuses a year whose earlier quarters are missing', () => {
+    // FY2024 has only its fourth quarter in the history.
+    const years = annualAdjustedEps(swkQuarters, swkYearEnds);
+    expect(years.find((y) => y.year === '2024')).toBeUndefined();
+  });
+
+  it('refuses a year with an unreported quarter', () => {
+    const quarters = swkQuarters.map((q) =>
+      q.date === '2025-07-29' ? { ...q, epsActual: null } : q,
+    );
+    expect(annualAdjustedEps(quarters, swkYearEnds)).toEqual([]);
+  });
+
+  it('handles a calendar-year company reporting two weeks after quarter end', () => {
+    const bank = [
+      { date: '2025-04-11', epsActual: 5.07 },
+      { date: '2025-07-15', epsActual: 5.24 },
+      { date: '2025-10-14', epsActual: 5.07 },
+      { date: '2026-01-13', epsActual: 4.81 },
+      { date: '2026-04-14', epsActual: 5.2 },
+    ];
+    const years = annualAdjustedEps(bank, [{ date: '2025-12-31', fiscalYear: '2025' }]);
+    expect(years).toHaveLength(1);
+    expect(years[0].adjustedEps).toBeCloseTo(20.19, 2);
   });
 
   it('handles an empty history', () => {
-    expect(annualAdjustedEps([])).toEqual([]);
+    expect(annualAdjustedEps([], swkYearEnds)).toEqual([]);
   });
 });
 
