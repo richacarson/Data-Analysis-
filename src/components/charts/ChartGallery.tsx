@@ -377,7 +377,7 @@ export function ChartGallery({ data }: { data: ChartData }) {
         <Segmented label="Period" options={PERIODS} value={period} onChange={setPeriod} />
         <Segmented label="Range" options={RANGES} value={range} onChange={setRange} />
         <button className="btn ml-auto py-2 sm:py-1.5" onClick={() => setPicking(true)}>
-          Charts · {selected.length}
+          Choose charts · {selected.length} of {CHARTS.length}
         </button>
       </div>
 

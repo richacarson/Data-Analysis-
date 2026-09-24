@@ -64,17 +64,36 @@ export function useChartPrefs() {
     };
   }, [supabase]);
 
+  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const push = useCallback(
+    async (next: string[]) => {
+      if (!supabase) return;
+      // The first load may still be resolving the user; don't drop the save.
+      if (!userId.current) {
+        const { data } = await supabase.auth.getUser();
+        userId.current = data.user?.id ?? null;
+      }
+      if (!userId.current) return;
+      // Supabase queries are lazy: nothing is sent until the builder is awaited.
+      const { error } = await supabase
+        .from('eq_user_preferences')
+        .upsert({ user_id: userId.current, chart_ids: next, updated_at: new Date().toISOString() });
+      if (error) console.warn('Chart selection not synced:', error.message);
+    },
+    [supabase],
+  );
+
   const save = useCallback(
     (next: string[]) => {
       setIds(next);
       writeLocal(next);
-      if (supabase && userId.current) {
-        void supabase
-          .from('eq_user_preferences')
-          .upsert({ user_id: userId.current, chart_ids: next, updated_at: new Date().toISOString() });
-      }
+      // Ticking through the list sends one write when the user pauses, so
+      // writes cannot land out of order and leave an older selection saved.
+      if (pending.current) clearTimeout(pending.current);
+      pending.current = setTimeout(() => void push(next), 600);
     },
-    [supabase],
+    [push],
   );
 
   return { ids, save };
