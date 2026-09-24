@@ -36,6 +36,9 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
   },
   formatDetection: { telephone: false },
+  // Next emits only the standards tag (mobile-web-app-capable); iOS still keys
+  // full-screen home-screen launch off Apple's own name for it.
+  other: { 'apple-mobile-web-app-capable': 'yes' },
   robots: { index: false, follow: false },
 };
 

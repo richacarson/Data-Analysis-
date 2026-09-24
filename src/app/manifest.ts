@@ -6,6 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'Equity Lens — Paradiem',
     short_name: 'Equity Lens',
     description: 'Paradiem equity research: expected returns, valuation models and sleeve screens.',
+    id: '/',
     start_url: '/',
     scope: '/',
     display: 'standalone',
