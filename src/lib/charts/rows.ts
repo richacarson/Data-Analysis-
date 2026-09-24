@@ -379,3 +379,53 @@ export function weeklyPrices(prices: Array<{ date: string; price: number }>) {
   }
   return out;
 }
+
+/** Fields carried week by week rather than once per period. */
+export const CONTINUOUS_KEYS = [
+  'price',
+  'marketCap',
+  'pe',
+  'peAdjusted',
+  'ps',
+  'pfcf',
+  'evEbitda',
+  'fcfYield',
+  'dividendYield',
+] as const;
+
+export type WeeklyPoint = { date: string; price: number } & Partial<Record<(typeof CONTINUOUS_KEYS)[number], number | null>>;
+
+/**
+ * Valuation week by week: each weekly close against the latest twelve months
+ * reported by then. This is how a P/E line moves between reports — the price
+ * moves daily while the earnings under it step once a quarter.
+ */
+export function weeklyValuation(
+  prices: Array<{ date: string; price: number }>,
+  basis: PeriodRow[],
+): WeeklyPoint[] {
+  const sorted = [...basis].sort((a, b) => a.date.localeCompare(b.date));
+  let j = -1;
+  return prices.map((p) => {
+    while (j + 1 < sorted.length && sorted[j + 1].date <= p.date) j++;
+    const b = j >= 0 ? sorted[j] : undefined;
+    const f = (k: string) => (b ? finite(b[k]) : null);
+    const shares = f('dilutedShares');
+    const marketCap = shares !== null ? p.price * shares : null;
+    const positive = (v: Num) => (v !== null && v > 0 ? v : null);
+    const ebitda = positive(f('ebitda'));
+    const netDebt = f('netDebt');
+    return {
+      date: p.date,
+      price: p.price,
+      marketCap,
+      pe: multiple(p.price, f('eps')),
+      peAdjusted: multiple(p.price, f('epsAdjusted')),
+      ps: marketCap !== null && positive(f('revenue')) ? marketCap / f('revenue')! : null,
+      pfcf: marketCap !== null && positive(f('freeCashFlow')) ? marketCap / f('freeCashFlow')! : null,
+      evEbitda: marketCap !== null && ebitda && netDebt !== null ? (marketCap + netDebt) / ebitda : null,
+      fcfYield: marketCap ? ratio(f('freeCashFlow'), marketCap) : null,
+      dividendYield: marketCap && f('dividends') ? ratio(f('dividends'), marketCap) : null,
+    };
+  });
+}

@@ -57,8 +57,8 @@ const PRICE = { key: 'price', label: 'Share price', format: 'perShare' as const 
 
 export const CHARTS: ChartDef[] = [
   // ---- Price & valuation --------------------------------------------------
-  { id: 'price', title: 'Share price', category: 'Price & valuation', kind: 'price', series: [{ key: 'price', label: 'Price' }], format: 'perShare', note: 'Weekly close' },
-  { id: 'marketCap', title: 'Market cap', category: 'Price & valuation', kind: 'bar', series: [{ key: 'marketCap', label: 'Market cap' }], format: 'money', note: 'At period end' },
+  { id: 'price', title: 'Share price', category: 'Price & valuation', kind: 'price', series: [{ key: 'price', label: 'Price' }], format: 'perShare', note: 'Weekly close, split-adjusted' },
+  { id: 'marketCap', title: 'Market cap', category: 'Price & valuation', kind: 'line', series: [{ key: 'marketCap', label: 'Market cap' }], format: 'money', note: 'Weekly' },
   { id: 'pe', title: 'P/E', category: 'Price & valuation', kind: 'line', series: [{ key: 'pe', label: 'P/E' }], format: 'multiple', note: 'Price over trailing-year GAAP EPS' },
   { id: 'peAdjusted', title: 'P/E (adjusted EPS)', category: 'Price & valuation', kind: 'line', series: [{ key: 'peAdjusted', label: 'P/E adjusted' }], format: 'multiple', note: 'The basis consensus is quoted on' },
   { id: 'ps', title: 'Price / sales', category: 'Price & valuation', kind: 'line', series: [{ key: 'ps', label: 'P/S' }], format: 'multiple', note: 'Trailing-year revenue' },

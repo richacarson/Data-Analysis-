@@ -19,6 +19,8 @@ import {
   quarterRows,
   ttmRows,
   weeklyPrices,
+  weeklyValuation,
+  type WeeklyPoint,
   type BalanceInput,
   type CashFlowInput,
   type IncomeInput,
@@ -32,7 +34,8 @@ export interface ChartData {
   annual: PeriodRow[];
   /** Consensus years after the last reported one, annual view only. */
   estimates: PeriodRow[];
-  prices: Array<{ date: string; price: number }>;
+  /** Weekly closes with the valuation multiples at each, for continuous lines. */
+  weekly: WeeklyPoint[];
   segments: { product: SegmentData; geographic: SegmentData };
   issues: string[];
 }
@@ -44,6 +47,16 @@ function compact(rows: PeriodRow[]): PeriodRow[] {
     for (const [k, v] of Object.entries(r)) {
       if (v === null || v === undefined) continue;
       out[k] = typeof v === 'number' ? Number(v.toPrecision(6)) : v;
+    }
+    return out;
+  });
+}
+
+function compactWeekly(points: WeeklyPoint[]): WeeklyPoint[] {
+  return points.map((p) => {
+    const out: WeeklyPoint = { date: p.date, price: p.price };
+    for (const [k, v] of Object.entries(p)) {
+      if (typeof v === 'number' && k !== 'price') (out as Record<string, unknown>)[k] = Number(v.toPrecision(5));
     }
     return out;
   });
@@ -133,10 +146,12 @@ export async function buildChartData(symbol: string): Promise<ChartData> {
     ttm: compact(ttm),
     annual: compact(annual),
     estimates: compact(forward),
-    prices: weeklyPrices(prices),
+    weekly: compactWeekly(
+      weeklyValuation(weeklyPrices(prices), trailing.length ? trailing : years),
+    ),
     segments: {
-      product: foldSegments(product.map((s) => ({ fiscalYear: String(s.fiscalYear), data: s.data }))),
-      geographic: foldSegments(geographic.map((s) => ({ fiscalYear: String(s.fiscalYear), data: s.data }))),
+      product: foldSegments(product.map((s) => ({ fiscalYear: String(s.fiscalYear), date: s.date, data: s.data }))),
+      geographic: foldSegments(geographic.map((s) => ({ fiscalYear: String(s.fiscalYear), date: s.date, data: s.data }))),
     },
     issues,
   };

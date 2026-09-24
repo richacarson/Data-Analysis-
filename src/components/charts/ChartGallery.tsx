@@ -5,7 +5,10 @@ import { CATEGORIES, CHARTS, DEFAULT_CHART_IDS, chartById, type ChartDef } from 
 import type { ChartData } from '@/lib/charts/build';
 import type { ChartPeriod } from '@/lib/charts/rows';
 import { formatValue } from '@/lib/charts/format';
-import { ChartLegend, MetricChart, type ChartRow } from './MetricChart';
+import { MetricChart, type ChartRow } from './MetricChart';
+import { CONTINUOUS_KEYS } from '@/lib/charts/rows';
+
+const CONTINUOUS = new Set<string>(CONTINUOUS_KEYS);
 import { useChartPrefs } from './useChartPrefs';
 
 const PERIODS: Array<{ key: ChartPeriod; label: string }> = [
@@ -48,11 +51,11 @@ function useView() {
 /** Rows for one chart under the current controls. */
 function rowsFor(def: ChartDef, data: ChartData, period: ChartPeriod, years: number): ChartRow[] {
   if (def.kind === 'price') {
-    if (!Number.isFinite(years)) return data.prices;
+    if (!Number.isFinite(years)) return data.weekly;
     const cutoff = new Date();
     cutoff.setFullYear(cutoff.getFullYear() - years);
     const iso = cutoff.toISOString().slice(0, 10);
-    return data.prices.filter((p) => p.date >= iso);
+    return data.weekly.filter((p) => p.date >= iso);
   }
   if (def.kind === 'segments') {
     const rows = def.segmentSource === 'geographic' ? data.segments.geographic.rows : data.segments.product.rows;
@@ -72,9 +75,17 @@ function segmentKeys(def: ChartDef, data: ChartData) {
 }
 
 /** Latest reported value of the chart's first series, for the card header. */
-function latest(def: ChartDef, rows: ChartRow[]): string | null {
+function latest(def: ChartDef, rows: ChartRow[], weekly: ChartData['weekly']): string | null {
   const key = def.kind === 'segments' ? null : def.series[0]?.key;
   if (!key) return null;
+  // Price and the multiples move weekly: show today's, not the last quarter-end's.
+  if (def.kind === 'price' || (def.kind === 'line' && CONTINUOUS.has(key))) {
+    for (let i = weekly.length - 1; i >= 0; i--) {
+      const v = (weekly[i] as Record<string, unknown>)[key];
+      if (typeof v === 'number') return formatValue(v, def.format);
+    }
+    return null;
+  }
   for (let i = rows.length - 1; i >= 0; i--) {
     const v = rows[i][key];
     if (!rows[i].estimate && typeof v === 'number') return formatValue(v, def.format);
@@ -123,7 +134,7 @@ function ChartCard({
 }) {
   const rows = rowsFor(def, data, period, years);
   const keys = segmentKeys(def, data);
-  const value = latest(def, rows);
+  const value = latest(def, rows, data.weekly);
   return (
     <section className="panel flex min-w-0 flex-col">
       <div className="flex items-start justify-between gap-3 px-3.5 pb-1 pt-3">
@@ -146,13 +157,10 @@ function ChartCard({
           </button>
         </div>
       </div>
-      <div className="px-1.5">
-        <WhenVisible height={190}>
-          <MetricChart def={def} rows={rows} height={190} segmentKeys={keys} compactAxes />
+      <div className="px-2 pb-2">
+        <WhenVisible height={220}>
+          <MetricChart def={def} rows={rows} weekly={data.weekly} height={220} segmentKeys={keys} compact />
         </WhenVisible>
-      </div>
-      <div className="min-h-[22px] px-3.5 pb-2.5 pt-1">
-        <ChartLegend def={def} rows={rows} segmentKeys={keys} />
       </div>
     </section>
   );
@@ -213,11 +221,8 @@ function Expanded({
           </button>
         </div>
         <div className="overflow-y-auto">
-          <div className="px-2 pt-3">
-            <MetricChart def={def} rows={rows} height={340} segmentKeys={keys} />
-          </div>
-          <div className="px-4 pb-2 pt-2">
-            <ChartLegend def={def} rows={rows} segmentKeys={keys} />
+          <div className="px-3 pb-3 pt-3">
+            <MetricChart def={def} rows={rows} weekly={data.weekly} height={360} segmentKeys={keys} />
           </div>
           <div className="overflow-x-auto border-t border-line">
             <table className="w-full text-[11px]">

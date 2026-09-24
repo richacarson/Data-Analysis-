@@ -16,7 +16,7 @@ const MAX_NAMED = 5;
 export const OTHER = 'Other';
 
 export function foldSegments(
-  input: Array<{ fiscalYear: string; data: Record<string, number> }>,
+  input: Array<{ fiscalYear: string; date?: string; data: Record<string, number> }>,
   years = 12,
 ): SegmentData {
   const chronological = [...input]
@@ -32,7 +32,12 @@ export function foldSegments(
     .filter((r) => ranked.some((s) => typeof r.data[s] === 'number'))
     .slice(-years)
     .map((r) => {
-      const row: SegmentData['rows'][number] = { key: `FY${r.fiscalYear}`, label: r.fiscalYear };
+      const row: SegmentData['rows'][number] = {
+        key: `FY${r.fiscalYear}`,
+        label: r.fiscalYear,
+        // Period end places the column on the chart's time axis.
+        date: r.date ?? `${r.fiscalYear}-12-31`,
+      };
       // Anything not named — smaller segments, or ones since renamed — is
       // kept as Other so each year's stack still sums to its revenue.
       let other = 0;

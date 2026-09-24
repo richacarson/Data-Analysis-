@@ -78,9 +78,33 @@ export const getRevenueSegments = (symbol: string, period: Period = 'annual') =>
 export const getGeographicSegments = (symbol: string, period: Period = 'annual') =>
   fmpList<RevenueSegment>('revenue-geographic-segmentation', { symbol, period });
 
-/** Daily closes, newest first. Split-adjusted, so they line up with per-share history. */
-export const getPriceHistory = (symbol: string, from: string) =>
-  fmpList<PriceBar>('historical-price-eod/light', { symbol, from }, TTL.ratios);
+/** Daily closes for one window, newest first. Split-adjusted, matching per-share history. */
+const getPriceWindow = (symbol: string, from: string, to: string) =>
+  fmpList<PriceBar>('historical-price-eod/light', { symbol, from, to }, TTL.ratios);
+
+/**
+ * Daily closes from `from` to today.
+ *
+ * FMP answers a long range with only its most recent five years or so, which
+ * left every price-based chart (P/E, market cap, yields, the price overlays)
+ * blank before 2022. Asking in four-year windows returns the full history.
+ */
+export async function getPriceHistory(symbol: string, from: string): Promise<PriceBar[]> {
+  const windows: Array<[string, string]> = [];
+  const end = new Date();
+  let start = new Date(`${from}T00:00:00Z`);
+  while (start < end) {
+    const stop = new Date(start);
+    stop.setUTCFullYear(stop.getUTCFullYear() + 4);
+    const to = stop < end ? stop : end;
+    windows.push([start.toISOString().slice(0, 10), to.toISOString().slice(0, 10)]);
+    start = new Date(to.getTime() + 24 * 60 * 60 * 1000);
+  }
+  const parts = await Promise.all(windows.map(([a, b]) => getPriceWindow(symbol, a, b)));
+  const byDate = new Map<string, PriceBar>();
+  for (const bar of parts.flat()) byDate.set(bar.date, bar);
+  return [...byDate.values()];
+}
 
 /** Prices for many symbols in one request, so a screen is not N calls. */
 export const getBatchQuotes = (symbols: string[]) =>

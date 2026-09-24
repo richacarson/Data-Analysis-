@@ -1,131 +1,238 @@
 'use client';
 
-import { useId } from 'react';
-import {
-  Area,
-  Bar,
-  CartesianGrid,
-  Cell,
-  ComposedChart,
-  Line,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ChartDef, ValueFormat } from '@/lib/charts/catalog';
 import { formatTick, formatValue } from '@/lib/charts/format';
 import { OTHER } from '@/lib/charts/segments';
+import { CONTINUOUS_KEYS, type WeeklyPoint } from '@/lib/charts/rows';
 
 export type ChartRow = Record<string, string | number | boolean | null | undefined>;
 
-// Brand chart tokens, validated against the navy surface: two hues, plus a
-// recessive backdrop. A third series is carried by a dashed neutral line, so
-// identity never rests on a hue the palette cannot separate.
+/*
+ * Drawn directly in SVG rather than through a charting library, so the
+ * details a reader actually uses — the price line running over the bars, the
+ * first and last values called out, a crosshair that reads every series at
+ * once — are exact rather than approximated.
+ *
+ * Brand tokens validated against the navy surface: gold columns, periwinkle
+ * overlay, a dashed neutral for a third line, a gold ramp for composition.
+ */
 export const S1 = '#AE8E2F';
 export const S2 = '#5D82D8';
 const NEUTRAL = '#B8B4AC';
 const BACKDROP = '#38386B';
 const SURFACE = '#1F1F45';
-const GRID = 'rgba(201,168,76,0.08)';
-const AXIS = { fill: '#A09C94', stroke: 'none', fontSize: 10, fontFamily: 'var(--font-plex-mono)' };
-/** Ordinal gold ramp for composition, largest segment brightest. */
+const GRID = 'rgba(201,168,76,0.09)';
+const TICK = '#A09C94';
 const RAMP = ['#E2D09E', '#CEB574', '#B99B47', '#A58100', '#8C6900'];
+
+const CONTINUOUS = new Set<string>(CONTINUOUS_KEYS);
+const DAY = 86_400_000;
 
 export function seriesColor(def: ChartDef, index: number, key: string): string {
   if (def.kind === 'segments') return key === OTHER ? BACKDROP : RAMP[index % RAMP.length];
   return [S1, S2, NEUTRAL][index] ?? NEUTRAL;
 }
 
-function ReadoutRow({ color, dashed, label, value }: { color: string; dashed?: boolean; label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="flex items-center gap-1.5 text-t3">
-        <svg width="12" height="4" aria-hidden>
-          <line x1="0" y1="2" x2="12" y2="2" stroke={color} strokeWidth="2" strokeDasharray={dashed ? '3 2' : undefined} />
-        </svg>
-        {label}
-      </span>
-      <span className="tabular font-semibold text-t1">{value}</span>
-    </div>
-  );
+const toT = (date: unknown) => Date.parse(`${String(date).slice(0, 10)}T00:00:00Z`);
+
+/** Round-number ticks spanning [min, max]. */
+function niceTicks(min: number, max: number, count: number): number[] {
+  if (!(max > min)) {
+    const pad = Math.abs(max) * 0.1 || 1;
+    min -= pad;
+    max += pad;
+  }
+  const raw = (max - min) / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? 10 * mag;
+  const lo = Math.floor(min / step) * step;
+  const hi = Math.ceil(max / step) * step;
+  const ticks: number[] = [];
+  for (let v = lo; v <= hi + step / 2; v += step) ticks.push(Number(v.toPrecision(12)));
+  return ticks;
 }
 
-/** One readout for every series at the hovered period, overlay included. */
-function Readout({
-  active,
-  payload,
-  def,
-  keys,
-}: {
-  active?: boolean;
-  payload?: Array<{ payload: ChartRow }>;
-  def: ChartDef;
-  keys: Array<{ key: string; label: string }>;
-}) {
-  if (!active || !payload?.length) return null;
-  const row = payload[0].payload;
-  const estimate = Boolean(row.estimate);
-  return (
-    <div className="min-w-[160px] border border-lineHover bg-card px-3 py-2 text-[11px] shadow-lg">
-      <p className="mb-1.5 font-semibold text-t1">
-        {String(row.label ?? row.date ?? '')}
-        {estimate && (
-          <span className="ml-1.5 font-normal text-t3">
-            consensus{typeof row.analysts === 'number' ? ` · ${row.analysts} analysts` : ''}
-          </span>
-        )}
-      </p>
-      <div className="space-y-1">
-        {keys.map((s, i) => (
-          <ReadoutRow
-            key={s.key}
-            color={seriesColor(def, i, s.key)}
-            dashed={def.kind === 'line' && i === 2}
-            label={s.label}
-            value={formatValue(row[s.key] as number, def.format)}
-          />
-        ))}
-        {def.overlay && !estimate && (
-          <ReadoutRow
-            color={S2}
-            label={def.overlay.label}
-            value={formatValue(row[def.overlay.key] as number, def.overlay.format)}
-          />
-        )}
-      </div>
-    </div>
-  );
+interface Line {
+  key: string;
+  label: string;
+  color: string;
+  format: ValueFormat;
+  axis: 'left' | 'right';
+  points: Array<{ t: number; v: number; label?: string }>;
+  dashed?: boolean;
+  area?: boolean;
+  continuous: boolean;
+}
+
+interface Spec {
+  bars: Array<{ key: string; label: string; color: string }>;
+  mode: 'single' | 'stack' | 'group';
+  rows: ChartRow[];
+  lines: Line[];
+  leftFormat: ValueFormat;
+  rightFormat: ValueFormat | null;
+  average: number | null;
 }
 
 function hasData(rows: ChartRow[], key: string) {
   return rows.some((r) => typeof r[key] === 'number');
 }
 
+function weeklyLine(
+  weekly: WeeklyPoint[],
+  key: string,
+  from: number,
+  to: number,
+): Array<{ t: number; v: number }> {
+  const out: Array<{ t: number; v: number }> = [];
+  for (const p of weekly) {
+    const v = (p as Record<string, unknown>)[key];
+    const t = toT(p.date);
+    if (typeof v === 'number' && t >= from && t <= to) out.push({ t, v });
+  }
+  return out;
+}
+
+/** Turns a catalog entry and the current rows into what gets drawn. */
+function buildSpec(def: ChartDef, rows: ChartRow[], weekly: WeeklyPoint[], segmentKeys: string[]): Spec {
+  const spec: Spec = { bars: [], mode: 'single', rows, lines: [], leftFormat: def.format, rightFormat: null, average: null };
+  const firstT = rows.length ? toT(rows[0].date) : -Infinity;
+
+  if (def.kind === 'price' || (def.kind === 'line' && def.series.length === 1 && CONTINUOUS.has(def.series[0].key))) {
+    // Continuous series over the selected range, ending today.
+    const key = def.kind === 'price' ? 'price' : def.series[0].key;
+    const from = rows.length ? toT(rows[0].date) : -Infinity;
+    const points = weeklyLine(weekly, key, from, Infinity);
+    spec.lines.push({ key, label: def.series[0].label, color: S1, format: def.format, axis: 'left', points, area: def.kind === 'price', continuous: true });
+    if (def.kind === 'line' && key !== 'marketCap' && points.length) {
+      spec.average = points.reduce((a, p) => a + p.v, 0) / points.length;
+    }
+    return spec;
+  }
+
+  if (def.kind === 'line') {
+    def.series
+      .filter((s) => hasData(rows, s.key))
+      .forEach((s, i) =>
+        spec.lines.push({
+          key: s.key,
+          label: s.label,
+          color: seriesColor(def, i, s.key),
+          format: def.format,
+          axis: 'left',
+          dashed: i === 2,
+          continuous: false,
+          points: rows
+            .filter((r) => typeof r[s.key] === 'number')
+            .map((r) => ({ t: toT(r.date), v: r[s.key] as number, label: String(r.label) })),
+        }),
+      );
+    return spec;
+  }
+
+  const keys =
+    def.kind === 'segments' ? segmentKeys.map((k) => ({ key: k, label: k })) : def.series.filter((s) => hasData(rows, s.key));
+  spec.bars = keys.map((s, i) => ({ ...s, color: seriesColor(def, i, s.key) }));
+  spec.mode = def.kind === 'stack' || def.kind === 'segments' ? 'stack' : def.kind === 'group' ? 'group' : 'single';
+
+  if (def.overlay) {
+    const o = def.overlay;
+    const continuous = CONTINUOUS.has(o.key);
+    // Estimates have no price; the line runs through the reported periods to today.
+    const reported = rows.filter((r) => !r.estimate);
+    const points = continuous
+      ? weeklyLine(weekly, o.key, firstT - 60 * DAY, Infinity)
+      : reported.filter((r) => typeof r[o.key] === 'number').map((r) => ({ t: toT(r.date), v: r[o.key] as number, label: String(r.label) }));
+    if (points.length > 1) {
+      spec.lines.push({ key: o.key, label: o.label, color: S2, format: o.format, axis: 'right', points, continuous });
+      spec.rightFormat = o.format;
+    }
+  }
+  return spec;
+}
+
+/** A value called out on the chart: a filled tag, legible on either series colour. */
+function Tag({ x, y, text, color, anchor }: { x: number; y: number; text: string; color: string; anchor: 'start' | 'end' | 'middle' }) {
+  const w = text.length * 6 + 10;
+  const left = anchor === 'start' ? x : anchor === 'end' ? x - w : x - w / 2;
+  const ink = color === S2 ? '#FFFFFF' : '#171738';
+  return (
+    <g pointerEvents="none">
+      <rect x={left} y={y - 8} width={w} height={16} rx={2} fill={color} />
+      <text x={left + w / 2} y={y + 3.5} textAnchor="middle" fontSize={10} fontWeight={600} fill={ink} fontFamily="var(--font-plex-mono)">
+        {text}
+      </text>
+    </g>
+  );
+}
+
+function useWidth<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setWidth(Math.floor(e.contentRect.width)));
+    ro.observe(el);
+    setWidth(Math.floor(el.getBoundingClientRect().width));
+    return () => ro.disconnect();
+  }, []);
+  return { ref, width };
+}
+
+function formatDate(t: number) {
+  return new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
 export function MetricChart({
   def,
   rows,
+  weekly,
   height,
   segmentKeys = [],
-  compactAxes = false,
+  compact = false,
 }: {
   def: ChartDef;
   rows: ChartRow[];
+  weekly: WeeklyPoint[];
   height: number;
   segmentKeys?: string[];
-  compactAxes?: boolean;
+  compact?: boolean;
 }) {
   const uid = useId().replace(/:/g, '');
-  const hatch = `hatch-${uid}`;
-  const syncId = `sync-${uid}`;
+  const { ref, width } = useWidth<HTMLDivElement>();
+  const [hover, setHover] = useState<number | null>(null);
 
-  const keys =
-    def.kind === 'segments'
-      ? segmentKeys.map((k) => ({ key: k, label: k }))
-      : def.series.filter((s) => hasData(rows, s.key));
+  const spec = useMemo(() => buildSpec(def, rows, weekly, segmentKeys), [def, rows, weekly, segmentKeys]);
+  const empty = !spec.bars.length && !spec.lines.some((l) => l.points.length);
 
-  if (!keys.length || !rows.length) {
+  const hasRight = spec.lines.some((l) => l.axis === 'right');
+  const legendItems = [
+    ...(spec.bars.length > 1 || hasRight ? spec.bars.map((b) => ({ label: b.label, color: b.color, kind: 'bar' as const })) : []),
+    ...(spec.lines.length > 1 || hasRight
+      ? spec.lines.map((l) => ({ label: l.axis === 'right' ? `${l.label} (right axis)` : l.label, color: l.color, kind: 'line' as const, dashed: l.dashed }))
+      : []),
+  ];
+
+  const legend = legendItems.length ? (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pb-1.5 text-[10px] text-t3">
+      {legendItems.map((it) => (
+        <span key={it.label} className="flex items-center gap-1.5">
+          {it.kind === 'bar' ? (
+            <span className="h-2 w-2" style={{ background: it.color }} aria-hidden />
+          ) : (
+            <svg width="12" height="4" aria-hidden>
+              <line x1="0" y1="2" x2="12" y2="2" stroke={it.color} strokeWidth="2" strokeDasharray={it.dashed ? '3 2' : undefined} />
+            </svg>
+          )}
+          {it.label}
+        </span>
+      ))}
+    </div>
+  ) : null;
+
+  if (empty) {
     return (
       <div className="flex items-center justify-center text-[11px] text-t4" style={{ height }}>
         Not reported for this company
@@ -133,217 +240,356 @@ export function MetricChart({
     );
   }
 
-  const overlay = def.overlay && hasData(rows, def.overlay.key) ? def.overlay : null;
-  const stripHeight = overlay ? Math.round(height * 0.26) : 0;
-  const mainHeight = height - stripHeight;
-  const xKey = def.kind === 'price' ? 'date' : 'label';
-  const yWidth = compactAxes ? 40 : 48;
-  const anyNegative = keys.some((s) => rows.some((r) => typeof r[s.key] === 'number' && (r[s.key] as number) < 0));
+  const legendH = legend ? 20 : 0;
+  const plotH = height - legendH;
+  const m = { top: 14, right: hasRight ? (compact ? 42 : 52) : 10, bottom: 20, left: compact ? 42 : 52 };
+  const innerW = Math.max(10, width - m.left - m.right);
+  const innerH = Math.max(10, plotH - m.top - m.bottom);
 
-  const tick = (fmt: ValueFormat) => (v: number) => formatTick(v, fmt);
-
-  // Price runs weekly: tick the first week of each year, thinned on long spans.
-  let priceTicks: string[] | undefined;
-  if (def.kind === 'price') {
-    const starts = rows.filter((r, i) => i === 0 || String(r.date).slice(0, 4) !== String(rows[i - 1].date).slice(0, 4)).map((r) => String(r.date));
-    const step = Math.ceil(starts.length / (compactAxes ? 6 : 10));
-    priceTicks = starts.filter((_, i) => i % step === 0);
+  // ---- x: time ----------------------------------------------------------
+  const barTs = spec.rows.map((r) => toT(r.date));
+  const gaps = barTs.slice(1).map((t, i) => t - barTs[i]).sort((a, b) => a - b);
+  const period = gaps.length ? gaps[Math.floor(gaps.length / 2)] : 365 * DAY;
+  const lineTs = spec.lines.flatMap((l) => l.points.map((p) => p.t));
+  let t0 = Math.min(...(spec.bars.length ? barTs.map((t) => t - period / 2) : []), ...lineTs);
+  let t1 = Math.max(...(spec.bars.length ? barTs.map((t) => t + period / 2) : []), ...lineTs);
+  if (!(t1 > t0)) {
+    t0 -= DAY;
+    t1 += DAY;
   }
-  // Quarterly and TTM views: one tick per fiscal year, at its first quarter.
-  let quarterTicks: string[] | undefined;
-  if (def.kind !== 'price' && rows.some((r) => /^Q[1-4]$/.test(String(r.period)))) {
-    const firsts = rows.filter((r) => r.period === 'Q1').map((r) => String(r.label));
-    const step = Math.ceil(firsts.length / (compactAxes ? 6 : 10));
-    quarterTicks = firsts.filter((_, i) => i % step === 0);
-  }
-  const xTicks = priceTicks ?? quarterTicks;
-  const xTick =
-    def.kind === 'price'
-      ? (d: string) => String(d).slice(0, 4)
-      : quarterTicks
-        ? (l: string) => `FY${String(l).slice(-2)}`
-        : undefined;
+  const x = (t: number) => m.left + ((t - t0) / (t1 - t0)) * innerW;
+  const slotPx = spec.bars.length ? (period / (t1 - t0)) * innerW : 0;
+  const barW = Math.max(2, Math.min(slotPx * 0.72, 40));
 
-  // The strip carries only its range: low and high, so the scale is readable
-  // without competing with the main axis.
-  let stripTicks: number[] | undefined;
-  if (overlay) {
-    const values = rows.map((r) => r[overlay.key]).filter((v): v is number => typeof v === 'number');
-    stripTicks = values.length ? [Math.min(...values), Math.max(...values)] : undefined;
+  // ---- y: left (bars or primary lines), right (overlay) -----------------
+  const leftVals: number[] = [];
+  for (const r of spec.rows) {
+    if (!spec.bars.length) break;
+    if (spec.mode === 'stack') {
+      let pos = 0;
+      let neg = 0;
+      for (const b of spec.bars) {
+        const v = r[b.key];
+        if (typeof v === 'number') v >= 0 ? (pos += v) : (neg += v);
+      }
+      leftVals.push(pos, neg);
+    } else {
+      for (const b of spec.bars) if (typeof r[b.key] === 'number') leftVals.push(r[b.key] as number);
+    }
+  }
+  for (const l of spec.lines) if (l.axis === 'left') for (const p of l.points) leftVals.push(p.v);
+  const leftTicks = niceTicks(Math.min(0, ...leftVals), Math.max(0, ...leftVals), compact ? 4 : 5);
+  const rightVals = spec.lines.filter((l) => l.axis === 'right').flatMap((l) => l.points.map((p) => p.v));
+  const rightTicks = hasRight ? niceTicks(Math.min(0, ...rightVals), Math.max(0, ...rightVals), leftTicks.length - 1) : [];
+
+  const scale = (ticks: number[]) => {
+    const lo = ticks[0];
+    const hi = ticks[ticks.length - 1];
+    return (v: number) => m.top + innerH - ((v - lo) / (hi - lo || 1)) * innerH;
+  };
+  const yL = scale(leftTicks);
+  const yR = hasRight ? scale(rightTicks) : yL;
+  const yOf = (l: Line) => (l.axis === 'right' ? yR : yL);
+
+  // ---- x ticks ----------------------------------------------------------
+  const maxLabels = Math.max(2, Math.floor(innerW / (compact ? 52 : 64)));
+  let xTicks: Array<{ t: number; label: string }>;
+  if (spec.bars.length) {
+    const step = Math.ceil(spec.rows.length / maxLabels);
+    const lastIdx = spec.rows.length - 1;
+    xTicks = spec.rows
+      .map((r, i) => ({ t: toT(r.date), label: String(r.label), i }))
+      .filter(({ i }) => (lastIdx - i) % step === 0);
+  } else {
+    const years = (t1 - t0) / (365.25 * DAY);
+    const everyYears = years > 12 ? 4 : years > 7 ? 2 : 1;
+    xTicks = [];
+    const startYear = new Date(t0).getUTCFullYear() + 1;
+    for (let yv = startYear; Date.UTC(yv, 0, 1) <= t1; yv += everyYears) {
+      xTicks.push({ t: Date.UTC(yv, 0, 1), label: String(yv) });
+    }
+    if (years < 2.5) {
+      xTicks = [];
+      const d = new Date(t0);
+      let mo = d.getUTCMonth() + 1 - ((d.getUTCMonth() + 1) % 3) + 3;
+      let yv = d.getUTCFullYear();
+      for (;;) {
+        if (mo > 11) {
+          mo -= 12;
+          yv += 1;
+        }
+        const t = Date.UTC(yv, mo, 1);
+        if (t > t1) break;
+        xTicks.push({ t, label: new Date(t).toLocaleDateString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace(' ', " '") });
+        mo += years < 1.2 ? 3 : 6;
+      }
+    }
   }
 
-  const readout = <Tooltip content={<Readout def={def} keys={keys} />} cursor={{ fill: 'rgba(201,168,76,0.06)', stroke: 'rgba(201,168,76,0.3)' }} isAnimationActive={false} />;
+  // ---- hover ------------------------------------------------------------
+  const onMove = (e: React.PointerEvent<SVGRectElement>) => {
+    const box = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
+    const px = e.clientX - box.left;
+    setHover(t0 + ((px - m.left) / innerW) * (t1 - t0));
+  };
+  let hoverBar: ChartRow | null = null;
+  let hoverX: number | null = null;
+  if (hover !== null && spec.bars.length) {
+    let best = -1;
+    let bestD = Infinity;
+    barTs.forEach((t, i) => {
+      const d = Math.abs(t - hover);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    });
+    if (best >= 0) {
+      hoverBar = spec.rows[best];
+      hoverX = x(barTs[best]);
+    }
+  }
+  const nearest = (l: Line, t: number) => {
+    let lo = 0;
+    let hi = l.points.length - 1;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (l.points[mid].t < t) lo = mid;
+      else hi = mid;
+    }
+    return Math.abs(l.points[lo].t - t) <= Math.abs(l.points[hi].t - t) ? l.points[lo] : l.points[hi];
+  };
+  const hoverT = hoverBar ? barTs[spec.rows.indexOf(hoverBar)] : hover;
+  const hoverLines =
+    hoverT !== null
+      ? spec.lines.filter((l) => l.points.length).map((l) => {
+          // Continuous overlays read at the cursor; period lines at the period.
+          const p = nearest(l, l.continuous && hover !== null ? hover : hoverT);
+          return { l, p };
+        })
+      : [];
+  if (hover !== null && !spec.bars.length && hoverLines[0]) hoverX = x(hoverLines[0].p.t);
+
+  // ---- marks ------------------------------------------------------------
+  const zero = yL(0);
+  const bars: React.ReactNode[] = [];
+  spec.rows.forEach((r, i) => {
+    const cx = x(barTs[i]);
+    const active = hoverBar === r;
+    if (spec.mode === 'stack') {
+      let pos = 0;
+      let neg = 0;
+      spec.bars.forEach((b, k) => {
+        const v = r[b.key];
+        if (typeof v !== 'number' || v === 0) return;
+        const base = v >= 0 ? pos : neg;
+        const top = base + v;
+        if (v >= 0) pos = top;
+        else neg = top;
+        const y1 = yL(Math.max(base, top));
+        const y2 = yL(Math.min(base, top));
+        bars.push(
+          <rect key={`${i}-${k}`} x={cx - barW / 2} y={y1} width={barW} height={Math.max(0.5, y2 - y1 - 1)} fill={b.color} opacity={hoverBar && !active ? 0.55 : 1} />,
+        );
+      });
+    } else {
+      const n = spec.mode === 'group' ? spec.bars.length : 1;
+      const w = spec.mode === 'group' ? (barW - (n - 1) * 2) / n : barW;
+      spec.bars.forEach((b, k) => {
+        const v = r[b.key];
+        if (typeof v !== 'number') return;
+        const left = cx - barW / 2 + k * (w + 2);
+        const y1 = Math.min(yL(v), zero);
+        const h = Math.max(0.5, Math.abs(yL(v) - zero));
+        bars.push(
+          <rect
+            key={`${i}-${k}`}
+            x={left}
+            y={y1}
+            width={w}
+            height={h}
+            rx={Math.min(2, w / 4)}
+            fill={r.estimate ? `url(#hatch-${uid})` : b.color}
+            opacity={hoverBar && !active ? 0.55 : 1}
+          />,
+        );
+      });
+    }
+  });
+
+  const paths = spec.lines.map((l) => {
+    const y = yOf(l);
+    const d = l.points.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join('');
+    const area =
+      l.area && l.points.length
+        ? `${d}L${x(l.points[l.points.length - 1].t).toFixed(1)},${(m.top + innerH).toFixed(1)}L${x(l.points[0].t).toFixed(1)},${(m.top + innerH).toFixed(1)}Z`
+        : null;
+    return (
+      <g key={l.key}>
+        {area && <path d={area} fill={l.color} opacity={0.1} />}
+        <path d={d} fill="none" stroke={l.color} strokeWidth={l.continuous ? 1.6 : 2} strokeLinejoin="round" strokeLinecap="round" strokeDasharray={l.dashed ? '5 3' : undefined} />
+        {!l.continuous && l.points.length <= 16 && l.points.map((p) => <circle key={p.t} cx={x(p.t)} cy={y(p.v)} r={2.5} fill={l.color} stroke={SURFACE} strokeWidth={1.5} />)}
+      </g>
+    );
+  });
+
+  // First and last values, the Qualtrim way: where the story starts and ends.
+  type TagSpec = { key: string; x: number; y: number; text: string; color: string; anchor: 'start' | 'end' | 'middle' };
+  const tagSpecs: TagSpec[] = [];
+  const primaryBar = spec.bars.length && spec.mode === 'single' ? spec.bars[0] : null;
+  if (primaryBar) {
+    const reported = spec.rows.map((r, i) => ({ r, i })).filter(({ r }) => !r.estimate && typeof r[primaryBar.key] === 'number');
+    const first = reported[0];
+    const last = reported[reported.length - 1];
+    for (const pt of [first, last].filter(Boolean)) {
+      if (!pt || (pt === first && reported.length < 2)) continue;
+      const v = pt.r[primaryBar.key] as number;
+      const yy = Math.max(m.top + 8, Math.min(yL(v), zero) - 11);
+      const xx = x(barTs[pt.i]);
+      tagSpecs.push({ key: `bar-${pt.i}`, x: xx, y: yy, text: formatValue(v, spec.leftFormat).replace('.00', ''), color: primaryBar.color, anchor: pt === first ? 'start' : 'end' });
+    }
+  }
+  for (const l of spec.lines) {
+    if (l.points.length < 2 || l.dashed) continue;
+    if (spec.lines.length > 2) break;
+    const y = yOf(l);
+    const a = l.points[0];
+    const b = l.points[l.points.length - 1];
+    tagSpecs.push({ key: `${l.key}-end`, x: Math.min(x(b.t), m.left + innerW), y: Math.max(m.top + 8, Math.min(y(b.v), m.top + innerH - 8)), text: formatValue(b.v, l.format), color: l.color, anchor: 'end' });
+    if (l.continuous || spec.lines.length === 1) {
+      tagSpecs.push({ key: `${l.key}-start`, x: x(a.t), y: Math.max(m.top + 8, Math.min(y(a.v) - 12, m.top + innerH - 8)), text: formatValue(a.v, l.format), color: l.color, anchor: 'start' });
+    }
+  }
+  // Tags at the same end of the chart and within a line of each other would
+  // overlap; push the later one clear rather than hide either value.
+  const placed: TagSpec[] = [];
+  for (const t of tagSpecs) {
+    const w = t.text.length * 6 + 10;
+    const left = t.anchor === 'start' ? t.x : t.anchor === 'end' ? t.x - w : t.x - w / 2;
+    for (const p of placed) {
+      const pw = p.text.length * 6 + 10;
+      const pl = p.anchor === 'start' ? p.x : p.anchor === 'end' ? p.x - pw : p.x - pw / 2;
+      const overlapX = left < pl + pw && pl < left + w;
+      if (overlapX && Math.abs(p.y - t.y) < 18) {
+        t.y = p.y + (t.y >= p.y ? 18 : -18);
+        if (t.y > m.top + innerH - 8) t.y = p.y - 18;
+        if (t.y < m.top + 8) t.y = p.y + 18;
+      }
+    }
+    placed.push(t);
+  }
+  const tags = placed.map((t) => <Tag key={t.key} x={t.x} y={t.y} text={t.text} color={t.color} anchor={t.anchor} />);
+
+  const tooltipLeft = hoverX !== null ? (hoverX > width / 2 ? hoverX - 8 : hoverX + 8) : 0;
 
   return (
-    <div style={{ height }}>
-      {overlay && (
-        <div style={{ height: stripHeight }} className="border-b border-dashed border-hairline">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={rows} syncId={syncId} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
-              <XAxis dataKey={xKey} hide />
-              <YAxis
-                tick={AXIS}
-                tickLine={false}
-                axisLine={false}
-                width={yWidth}
-                ticks={stripTicks}
-                domain={['dataMin', 'dataMax']}
-                tickFormatter={tick(overlay.format)}
-              />
-              <Tooltip content={() => null} cursor={{ stroke: 'rgba(201,168,76,0.3)' }} />
-              {/* Invisible columns give the strip the same banded x-scale as the
-                  bars below, so each point sits over its own bar. */}
-              <Bar dataKey={overlay.key} fill="transparent" maxBarSize={24} isAnimationActive={false} />
-              <Line
-                dataKey={overlay.key}
-                stroke={S2}
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4, fill: S2, stroke: SURFACE, strokeWidth: 2 }}
-                connectNulls
-                isAnimationActive={false}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-      <div style={{ height: mainHeight }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart
-            data={rows}
-            syncId={overlay ? syncId : undefined}
-            margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
-            barCategoryGap="18%"
-            barGap={2}
-          >
+    <div>
+      {legend}
+      <div ref={ref} className="relative select-none" style={{ height: plotH, touchAction: 'pan-y' }}>
+        {width > 0 && (
+          <svg width={width} height={plotH} role="img" aria-label={def.title}>
             <defs>
-              <pattern id={hatch} width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-                <rect width="5" height="5" fill={S1} fillOpacity={0.18} />
+              <pattern id={`hatch-${uid}`} width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <rect width="5" height="5" fill={S1} fillOpacity={0.15} />
                 <line x1="0" y1="0" x2="0" y2="5" stroke={S1} strokeWidth="2" />
               </pattern>
+              <clipPath id={`clip-${uid}`}>
+                <rect x={m.left} y={m.top - 2} width={innerW} height={innerH + 4} />
+              </clipPath>
             </defs>
-            <CartesianGrid stroke={GRID} vertical={false} />
-            <XAxis
-              dataKey={xKey}
-              tick={AXIS}
-              tickLine={false}
-              axisLine={{ stroke: GRID }}
-              minTickGap={compactAxes ? 14 : 10}
-              tickFormatter={xTick}
-              ticks={xTicks}
-              interval={xTicks ? 0 : 'preserveStartEnd'}
-            />
-            <YAxis
-              tick={AXIS}
-              tickLine={false}
-              axisLine={false}
-              width={yWidth}
-              tickCount={4}
-              tickFormatter={tick(def.format)}
-              domain={def.kind === 'line' || def.kind === 'price' ? ['auto', 'auto'] : [anyNegative ? 'auto' : 0, 'auto']}
-            />
-            {anyNegative && <ReferenceLine y={0} stroke="rgba(250,247,242,0.25)" />}
-            {readout}
 
-            {def.kind === 'price' && (
-              <Area
-                dataKey="price"
-                stroke={S1}
-                strokeWidth={2}
-                fill={S1}
-                fillOpacity={0.1}
-                dot={false}
-                activeDot={{ r: 4, fill: S1, stroke: SURFACE, strokeWidth: 2 }}
-                isAnimationActive={false}
-              />
+            {leftTicks.map((v) => (
+              <g key={`l${v}`}>
+                <line x1={m.left} x2={m.left + innerW} y1={yL(v)} y2={yL(v)} stroke={v === 0 && leftTicks[0] < 0 ? 'rgba(250,247,242,0.25)' : GRID} />
+                <text x={m.left - 6} y={yL(v) + 3} textAnchor="end" fontSize={10} fill={TICK} fontFamily="var(--font-plex-mono)">
+                  {formatTick(v, spec.leftFormat)}
+                </text>
+              </g>
+            ))}
+            {hasRight &&
+              rightTicks.map((v) => (
+                <text key={`r${v}`} x={m.left + innerW + 6} y={yR(v) + 3} fontSize={10} fill={TICK} fontFamily="var(--font-plex-mono)">
+                  {formatTick(v, spec.rightFormat!)}
+                </text>
+              ))}
+            {xTicks.map((tk) => (
+              <text key={tk.t} x={x(tk.t)} y={plotH - 5} textAnchor="middle" fontSize={10} fill={TICK} fontFamily="var(--font-plex-mono)">
+                {tk.label}
+              </text>
+            ))}
+
+            <g clipPath={`url(#clip-${uid})`}>
+              {bars}
+              {spec.average !== null && (
+                <g>
+                  <line x1={m.left} x2={m.left + innerW} y1={yL(spec.average)} y2={yL(spec.average)} stroke={NEUTRAL} strokeDasharray="4 4" strokeWidth={1} />
+                </g>
+              )}
+              {paths}
+            </g>
+            {spec.average !== null && (
+              <text x={m.left + innerW / 2} y={yL(spec.average) - 5} textAnchor="middle" fontSize={10} fill="#D6D2CA" stroke={SURFACE} strokeWidth={4} paintOrder="stroke" fontFamily="var(--font-plex-mono)">
+                Average {formatValue(spec.average, spec.leftFormat)}
+              </text>
             )}
+            {tags}
 
-            {def.kind === 'line' &&
-              keys.map((s, i) => (
-                <Line
-                  key={s.key}
-                  dataKey={s.key}
-                  stroke={seriesColor(def, i, s.key)}
-                  strokeWidth={2}
-                  strokeDasharray={i === 2 ? '5 3' : undefined}
-                  dot={false}
-                  activeDot={{ r: 4, fill: seriesColor(def, i, s.key), stroke: SURFACE, strokeWidth: 2 }}
-                  connectNulls
-                  isAnimationActive={false}
-                />
-              ))}
+            {hoverX !== null && <line x1={hoverX} x2={hoverX} y1={m.top} y2={m.top + innerH} stroke="rgba(250,247,242,0.35)" strokeWidth={1} />}
+            {hoverLines.map(({ l, p }) => (
+              <circle key={l.key} cx={x(p.t)} cy={yOf(l)(p.v)} r={4} fill={l.color} stroke={SURFACE} strokeWidth={2} />
+            ))}
 
-            {(def.kind === 'bar' || def.kind === 'group') &&
-              keys.map((s, i) => (
-                <Bar
-                  key={s.key}
-                  dataKey={s.key}
-                  fill={seriesColor(def, i, s.key)}
-                  maxBarSize={24}
-                  radius={[3, 3, 0, 0]}
-                  isAnimationActive={false}
-                >
-                  {def.kind === 'bar' &&
-                    rows.map((r, j) => (
-                      <Cell key={j} fill={r.estimate ? `url(#${hatch})` : seriesColor(def, i, s.key)} />
-                    ))}
-                </Bar>
-              ))}
-
-            {(def.kind === 'stack' || def.kind === 'segments') &&
-              keys.map((s, i) => (
-                <Bar
-                  key={s.key}
-                  dataKey={s.key}
-                  stackId="stack"
-                  fill={seriesColor(def, i, s.key)}
-                  stroke={SURFACE}
-                  strokeWidth={1}
-                  maxBarSize={28}
-                  radius={i === keys.length - 1 ? [3, 3, 0, 0] : 0}
-                  isAnimationActive={false}
-                />
-              ))}
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
-/** The colour key: a swatch for bars, a line key for lines. Shown for two or more series. */
-export function ChartLegend({ def, segmentKeys = [], rows }: { def: ChartDef; segmentKeys?: string[]; rows: ChartRow[] }) {
-  const keys =
-    def.kind === 'segments'
-      ? segmentKeys.map((k) => ({ key: k, label: k }))
-      : def.series.filter((s) => hasData(rows, s.key));
-  const overlay = def.overlay && hasData(rows, def.overlay.key) ? def.overlay : null;
-  const isLine = def.kind === 'line';
-  if (keys.length < 2 && !overlay) return null;
-
-  return (
-    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-t3">
-      {keys.length >= 2 &&
-        keys.map((s, i) => (
-          <span key={s.key} className="flex items-center gap-1.5">
-            {isLine ? (
-              <svg width="12" height="4" aria-hidden>
-                <line x1="0" y1="2" x2="12" y2="2" stroke={seriesColor(def, i, s.key)} strokeWidth="2" strokeDasharray={i === 2 ? '3 2' : undefined} />
-              </svg>
-            ) : (
-              <span className="h-2 w-2" style={{ background: seriesColor(def, i, s.key) }} aria-hidden />
-            )}
-            {s.label}
-          </span>
-        ))}
-      {overlay && (
-        <span className="flex items-center gap-1.5">
-          <svg width="12" height="4" aria-hidden>
-            <line x1="0" y1="2" x2="12" y2="2" stroke={S2} strokeWidth="2" />
+            <rect
+              x={m.left}
+              y={0}
+              width={innerW}
+              height={plotH}
+              fill="transparent"
+              onPointerMove={onMove}
+              onPointerDown={onMove}
+              onPointerLeave={() => setHover(null)}
+            />
           </svg>
-          {overlay.label} (above)
-        </span>
-      )}
+        )}
+
+        {hoverX !== null && (hoverBar || hoverLines.length > 0) && (
+          <div
+            className="pointer-events-none absolute top-1 z-10 min-w-[150px] border border-lineHover bg-card/95 px-2.5 py-2 text-[11px] shadow-lg"
+            style={hoverX > width / 2 ? { right: width - tooltipLeft } : { left: tooltipLeft }}
+          >
+            <p className="mb-1 font-semibold text-t1">
+              {hoverBar ? String(hoverBar.label) : hoverLines[0] ? formatDate(hoverLines[0].p.t) : ''}
+              {hoverBar?.estimate ? (
+                <span className="ml-1.5 font-normal text-t3">
+                  consensus{typeof hoverBar.analysts === 'number' ? ` · ${hoverBar.analysts} analysts` : ''}
+                </span>
+              ) : null}
+            </p>
+            {hoverBar &&
+              spec.bars.map((b) => (
+                <div key={b.key} className="flex items-center justify-between gap-4">
+                  <span className="flex items-center gap-1.5 text-t3">
+                    <span className="h-2 w-2" style={{ background: b.color }} />
+                    {b.label}
+                  </span>
+                  <span className="tabular font-semibold text-t1">{formatValue(hoverBar[b.key] as number, spec.leftFormat)}</span>
+                </div>
+              ))}
+            {hoverLines.map(({ l, p }) => (
+              <div key={l.key} className="flex items-center justify-between gap-4">
+                <span className="flex items-center gap-1.5 text-t3">
+                  <svg width="10" height="4" aria-hidden>
+                    <line x1="0" y1="2" x2="10" y2="2" stroke={l.color} strokeWidth="2" strokeDasharray={l.dashed ? '3 2' : undefined} />
+                  </svg>
+                  {l.label}
+                  {l.continuous && hoverBar ? <span className="text-t4">{formatDate(p.t).replace(/, \d{4}$/, '')}</span> : null}
+                </span>
+                <span className="tabular font-semibold text-t1">{formatValue(p.v, l.format)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
