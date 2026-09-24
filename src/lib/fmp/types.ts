@@ -255,3 +255,17 @@ export interface RevenueSegment {
   date: string;
   data: Record<string, number>;
 }
+
+/**
+ * One reported quarter. `epsActual` is the figure the company and the street
+ * settle on, which is almost always an adjusted, non-GAAP number — a different
+ * basis from `epsDiluted` on the income statement.
+ */
+export interface EarningsReport {
+  symbol: string;
+  date: string;
+  epsActual: number | null;
+  epsEstimated: number | null;
+  revenueActual: number | null;
+  revenueEstimated: number | null;
+}

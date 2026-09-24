@@ -54,6 +54,36 @@ export function ExpectedReturnPanel({
           </p>
         </div>
       )}
+      {expected.basis.materialGap && (
+        <div className="border-b border-line bg-warn/[0.08] px-4 py-3">
+          <Badge tone="flat">
+            Adjusted earnings run {expected.basis.medianRatio?.toFixed(2)}× GAAP
+          </Badge>
+          <p className="mt-2 text-[12px] leading-relaxed text-t3">{expected.basis.note}</p>
+          {expected.basis.years.length > 0 && (
+            <table className="tabular mt-3 w-full text-[11px]">
+              <thead>
+                <tr className="text-t4">
+                  <th className="pb-1 text-left font-medium">Year</th>
+                  <th className="pb-1 text-right font-medium">GAAP</th>
+                  <th className="pb-1 text-right font-medium">Adjusted</th>
+                  <th className="pb-1 text-right font-medium">Ratio</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expected.basis.years.slice(0, 5).map((y) => (
+                  <tr key={y.year} className="text-t2">
+                    <td className="py-0.5">{y.year}</td>
+                    <td className="py-0.5 text-right">{num(y.gaapEps)}</td>
+                    <td className="py-0.5 text-right">{num(y.adjustedEps)}</td>
+                    <td className="py-0.5 text-right text-t3">{num(y.ratio)}×</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
       {expected.anchorsDisagree && (
         <div className="border-b border-line bg-warn/[0.08] px-4 py-3">
           <Badge tone="flat">
@@ -100,8 +130,10 @@ export function ExpectedReturnPanel({
       <div className="px-4 py-3">
         <p className="eyebrow-muted">Exit multiple anchors</p>
         <p className="mt-1.5 text-[11px] text-t4">
-          Using {expected.exitPeSource ?? 'none'}. The median survives one anchor being wrong in
-          either direction; the minimum would let a stale one decide the answer.
+          Using {expected.exitPeSource ?? 'none'}, computed on{' '}
+          {expected.peBasis === 'adjusted' ? 'adjusted' : 'GAAP'} earnings to match the basis the
+          forecast is quoted on. The median survives one anchor being wrong in either direction;
+          the minimum would let a stale one decide the answer.
         </p>
       </div>
       {anchors.map((a) => (

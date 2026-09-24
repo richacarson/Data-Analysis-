@@ -85,6 +85,16 @@ const CHECKS = [
     fields: ['symbol', 'name'],
   },
   {
+    endpoint: 'earnings',
+    params: { symbol: SYMBOL, limit: 4 },
+    fields: ['symbol', 'date', 'epsActual'],
+  },
+  {
+    endpoint: 'revenue-product-segmentation',
+    params: { symbol: SYMBOL, period: 'annual' },
+    fields: ['fiscalYear', 'data'],
+  },
+  {
     endpoint: 'ratios',
     params: { symbol: SYMBOL, period: 'annual', limit: 3 },
     fields: ['priceToEarningsRatio', 'netIncomePerShare', 'fiscalYear'],

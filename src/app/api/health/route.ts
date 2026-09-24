@@ -20,6 +20,12 @@ const CHECKS: Array<{ name: string; endpoint: string; params: Record<string, str
   { name: 'price target consensus', endpoint: 'price-target-consensus', params: { symbol: 'AAPL' } },
   { name: 'symbol search', endpoint: 'search-symbol', params: { query: 'AAPL', limit: '1' } },
   { name: 'company name search', endpoint: 'search-name', params: { query: 'apple', limit: '1' } },
+  { name: 'earnings history', endpoint: 'earnings', params: { symbol: 'AAPL', limit: '4' } },
+  {
+    name: 'revenue segments',
+    endpoint: 'revenue-product-segmentation',
+    params: { symbol: 'AAPL', period: 'annual' },
+  },
   { name: 'annual ratios', endpoint: 'ratios', params: { symbol: 'AAPL', period: 'annual', limit: '3' } },
   {
     name: 'industry P/E history',

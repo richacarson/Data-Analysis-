@@ -2,6 +2,7 @@ import { fmp, fmpList, TTL } from './client';
 import type {
   AnnualRatios,
   BatchQuote,
+  EarningsReport,
   RevenueSegment,
   BalanceSheetStatement,
   CashFlowStatement,
@@ -61,6 +62,13 @@ export const getPriceTargetConsensus = (symbol: string) =>
     (r) => r[0] ?? null,
   );
 
+
+/**
+ * Reported quarterly results. The only place actual adjusted EPS is available,
+ * which is the basis analyst estimates are quoted on.
+ */
+export const getEarningsHistory = (symbol: string, limit = 40) =>
+  fmpList<EarningsReport>('earnings', { symbol, limit }, TTL.estimates);
 
 /** Revenue split by product line, used for the stacked composition chart. */
 export const getRevenueSegments = (symbol: string, period: Period = 'annual') =>

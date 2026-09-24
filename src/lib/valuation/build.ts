@@ -5,6 +5,7 @@ import {
   getEnterpriseValues,
   getEstimates,
   getFinancialScores,
+  getEarningsHistory,
   getIncomeStatements,
   getIndustryPe,
   getRevenueSegments,
@@ -40,6 +41,11 @@ import {
 import { exitMultipleAnchors, median } from './exit-multiple';
 import { fairValueRange, grahamIsInformative } from './blend';
 import { latestCapexSplit } from './capex';
+import {
+  adjustedPeHistory,
+  annualAdjustedEps,
+  compareBases,
+} from './earnings-basis';
 import {
   epsActualVsEstimate,
   indexedToStart,
@@ -114,6 +120,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     annualRatios,
     quarterlyIncome,
     segments,
+    earningsHistory,
     riskFreeRate,
   ] = await Promise.all([
     // The profile carries the price and share count, so it is the one hard requirement.
@@ -130,6 +137,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     optional('annual ratios', getAnnualRatios(ticker, 10), []),
     optional('quarterly income', getIncomeStatements(ticker, 'quarter', 24), []),
     optional('revenue segments', getRevenueSegments(ticker), []),
+    optional('earnings history', getEarningsHistory(ticker, 44), []),
     getRiskFreeRate(),
   ]);
 
@@ -368,8 +376,29 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     sortedEstimates[sortedEstimates.length - 1] ??
     null;
 
-  // The company's own trailing multiple at each fiscal year end.
-  const ownPeHistory = annualRatios.map((r) => r.priceToEarningsRatio);
+  /*
+   * Consensus is quoted on an adjusted basis, so the historical multiple has to
+   * be too. The ratios endpoint computes P/E from GAAP earnings, which for a
+   * company with large recurring add-backs is a different number entirely:
+   * Stanley Black & Decker's FY2024 GAAP EPS was $1.95 against $4.15 of
+   * consensus, so a GAAP-anchored multiple applied to a consensus forecast
+   * roughly doubles the target price.
+   */
+  const adjustedEpsYears = annualAdjustedEps(earningsHistory);
+  const basis = compareBases(
+    income.map((i) => ({ fiscalYear: i.fiscalYear, epsDiluted: i.epsDiluted })),
+    adjustedEpsYears,
+  );
+
+  const adjustedPes = adjustedPeHistory(
+    enterprise.map((ev) => ({ year: ev.date.slice(0, 4), price: ev.stockPrice })),
+    adjustedEpsYears,
+  );
+
+  // Fall back to the GAAP series only where no adjusted history exists.
+  const ownPeHistory =
+    adjustedPes.length >= 3 ? adjustedPes : annualRatios.map((r) => r.priceToEarningsRatio);
+  const peBasis: 'adjusted' | 'gaap' = adjustedPes.length >= 3 ? 'adjusted' : 'gaap';
 
   // Industry P/E arrives per exchange per day; reduce to one number.
   let industryPeNow: number | null = null;
@@ -578,6 +607,8 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
       exitPe,
       exitPeSource: overrides.exitPe !== undefined ? 'Manual override' : anchors.recommendedSource,
       anchors: anchors.anchors,
+      peBasis,
+      basis,
       anchorsDisagree: anchors.anchorsDisagree,
       anchorSpread: anchors.spread,
       disagreementNote: anchors.disagreementNote,
