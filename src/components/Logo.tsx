@@ -1,12 +1,11 @@
 /**
  * The Paradiem shield with a lens over it: the house mark, looked at closely.
  *
- * The knockout circle and stroke are the page's navy, separating the gold lens
- * from the white shield, so the mark belongs on the navy surfaces it was drawn
- * for.
+ * The knockout circle and stroke are the page's navy, separating the lens from
+ * the shield, so the mark belongs on the navy surfaces it was drawn for.
  */
 const NAVY = '#171738';
-const GOLD = '#C9A84C';
+const LENS = '#FFFFFF';
 
 export function ShieldMark({ className = 'h-6 w-auto' }: { className?: string }) {
   return (
@@ -21,8 +20,8 @@ export function ShieldMark({ className = 'h-6 w-auto' }: { className?: string })
       </g>
       <line x1="388.0" y1="362.0" x2="466.0" y2="440.0" stroke={NAVY} strokeWidth={50.0} strokeLinecap="round" />
       <circle cx="388.0" cy="362.0" r="83.0" fill={NAVY} />
-      <circle cx="388.0" cy="362.0" r="62.0" fill="none" stroke={GOLD} strokeWidth={22.0} />
-      <line x1="439.6" y1="413.6" x2="466.0" y2="440.0" stroke={GOLD} strokeWidth={30.0} strokeLinecap="round" />
+      <circle cx="388.0" cy="362.0" r="62.0" fill="none" stroke={LENS} strokeWidth={22.0} />
+      <line x1="439.6" y1="413.6" x2="466.0" y2="440.0" stroke={LENS} strokeWidth={30.0} strokeLinecap="round" />
     </svg>
   );
 }
