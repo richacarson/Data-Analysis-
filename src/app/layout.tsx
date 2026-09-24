@@ -56,18 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <AppHeader />
 
-        <main className="mx-auto max-w-[1400px] px-3 py-4 sm:px-5 sm:py-6">{children}</main>
-
-        <footer className="mx-auto flex max-w-[1400px] justify-center border-t border-line px-3 pb-24 pt-8 sm:px-5 md:justify-start md:pb-10">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/brand/paradiem-logo-white.png"
-            alt="Paradiem"
-            width={824}
-            height={226}
-            className="h-auto w-[132px]"
-          />
-        </footer>
+        <main className="mx-auto max-w-[1400px] px-3 pb-24 pt-4 sm:px-5 sm:pt-6 md:pb-10">{children}</main>
 
         <MobileTabBar />
       </body>

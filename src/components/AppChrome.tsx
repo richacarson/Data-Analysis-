@@ -24,7 +24,7 @@ export function AppHeader() {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-bg/95 pt-[env(safe-area-inset-top)] backdrop-blur">
       <div className="mx-auto flex max-w-[1400px] items-center gap-3 px-3 py-2.5 sm:gap-6 sm:px-5 sm:py-3">
-        <Link href="/" className="shrink-0" aria-label="Equity Lens home">
+        <Link href="/" className="shrink-0" aria-label="Home">
           <Wordmark />
         </Link>
         {!auth && (

@@ -26,16 +26,16 @@ export function ShieldMark({ className = 'h-6 w-auto' }: { className?: string })
   );
 }
 
+/** The white Paradiem logo, as the header's home link. */
 export function Wordmark() {
   return (
-    <span className="flex items-center gap-2.5">
-      <ShieldMark className="h-8 w-auto shrink-0" />
-      <span className="flex flex-col leading-none">
-        <span className="font-serif text-[18px] tracking-tight text-t1">Equity Lens</span>
-        <span className="mt-1 hidden text-[9px] font-semibold uppercase tracking-eyebrow text-gold sm:block">
-          Paradiem
-        </span>
-      </span>
-    </span>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/brand/paradiem-logo-white.png"
+      alt="Paradiem"
+      width={824}
+      height={226}
+      className="h-7 w-auto sm:h-8"
+    />
   );
 }
