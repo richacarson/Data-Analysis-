@@ -55,13 +55,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         <main className="mx-auto max-w-[1400px] px-3 py-4 sm:px-5 sm:py-6">{children}</main>
 
-        <footer className="mx-auto max-w-[1400px] border-t border-line px-3 pb-24 pt-5 sm:px-5 md:pb-8">
-          <p className="eyebrow-muted">Paradiem · Wealth beyond today</p>
-          <p className="mt-2 max-w-3xl text-[11px] leading-relaxed text-t4">
-            Data from Financial Modeling Prep. Valuation models are estimates built on
-            assumptions shown alongside each figure — they are research tools, not investment
-            advice.
-          </p>
+        <footer className="mx-auto flex max-w-[1400px] justify-center border-t border-line px-3 pb-24 pt-8 sm:px-5 md:justify-start md:pb-10">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/paradiem-logo-white.png"
+            alt="Paradiem"
+            width={824}
+            height={226}
+            className="h-auto w-[132px]"
+          />
         </footer>
 
         <MobileTabBar />
