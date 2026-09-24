@@ -25,6 +25,8 @@ import {
 } from '@/lib/format';
 
 export const revalidate = 3600;
+// Room to wait out an FMP rate-limit window rather than fail the page.
+export const maxDuration = 120;
 
 export default async function StockPage({
   params,

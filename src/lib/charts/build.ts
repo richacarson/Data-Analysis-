@@ -61,14 +61,16 @@ export async function buildChartData(symbol: string): Promise<ChartData> {
     }
   };
 
+  // Request shapes match the valuation page's exactly, so whichever tab loads
+  // second is served from cache rather than spending API calls again.
   const [incQ, incA, cfQ, cfA, bsQ, bsA, earnings, estimates, product, geographic] = await Promise.all([
     optional('quarterly income', getIncomeStatements(ticker, 'quarter', 44), []),
-    optional('annual income', getIncomeStatements(ticker, 'annual', 15), []),
+    optional('annual income', getIncomeStatements(ticker, 'annual', 12), []),
     optional('quarterly cash flow', getCashFlowStatements(ticker, 'quarter', 44), []),
-    optional('annual cash flow', getCashFlowStatements(ticker, 'annual', 15), []),
+    optional('annual cash flow', getCashFlowStatements(ticker, 'annual', 12), []),
     optional('quarterly balance sheet', getBalanceSheets(ticker, 'quarter', 44), []),
-    optional('annual balance sheet', getBalanceSheets(ticker, 'annual', 15), []),
-    optional('earnings history', getEarningsHistory(ticker, 60), []),
+    optional('annual balance sheet', getBalanceSheets(ticker, 'annual', 12), []),
+    optional('earnings history', getEarningsHistory(ticker, 44), []),
     optional('analyst estimates', getEstimates(ticker, 'annual', 10), []),
     optional('product segments', getRevenueSegments(ticker, 'annual'), []),
     optional('geographic segments', getGeographicSegments(ticker, 'annual'), []),

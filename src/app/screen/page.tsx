@@ -9,12 +9,11 @@ import { ScreenTable } from '@/components/ScreenTable';
 export const revalidate = 3600;
 
 /*
- * The 154-holding screen is roughly 460 requests. At the concurrency below that
- * is well inside a minute, but comfortably past the default serverless ceiling,
- * so the limit is raised explicitly rather than left to time out on a cold
- * cache.
+ * The 154-holding screen is roughly 620 requests. The FMP client paces them to
+ * stay inside the key's per-minute allowance, so a cold run takes a minute or
+ * so; the limit is raised to cover it. Warm runs are served from cache.
  */
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export const metadata = { title: 'Screen — Equity Lens' };
 

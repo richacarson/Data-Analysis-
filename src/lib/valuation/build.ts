@@ -136,7 +136,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     optional('financial scores', getFinancialScores(ticker), null),
     optional('price target consensus', getPriceTargetConsensus(ticker), null),
     optional('annual ratios', getAnnualRatios(ticker, 10), []),
-    optional('quarterly income', getIncomeStatements(ticker, 'quarter', 24), []),
+    optional('quarterly income', getIncomeStatements(ticker, 'quarter', 44), []),
     optional('revenue segments', getRevenueSegments(ticker), []),
     optional('earnings history', getEarningsHistory(ticker, 44), []),
     getRiskFreeRate(),

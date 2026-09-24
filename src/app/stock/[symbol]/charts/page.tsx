@@ -6,6 +6,8 @@ import { StockTabs } from '@/components/StockTabs';
 import { money, num, signedPct } from '@/lib/format';
 
 export const revalidate = 3600;
+// Room to wait out an FMP rate-limit window rather than fail the page.
+export const maxDuration = 120;
 
 export async function generateMetadata({ params }: { params: Promise<{ symbol: string }> }) {
   const { symbol } = await params;
