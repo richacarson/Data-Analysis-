@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { DM_Sans, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { AppHeader, MobileTabBar } from '@/components/AppChrome';
+import { VersionWatcher } from '@/components/VersionWatcher';
 
 // The same pairing the Paradiem Dashboard uses.
 const dmSans = DM_Sans({
@@ -59,6 +60,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="mx-auto max-w-[1400px] px-3 pb-24 pt-4 sm:px-5 sm:pt-6 md:pb-10">{children}</main>
 
         <MobileTabBar />
+        <VersionWatcher />
       </body>
     </html>
   );

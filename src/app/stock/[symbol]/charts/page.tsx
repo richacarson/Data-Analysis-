@@ -38,6 +38,7 @@ export default async function ChartsPage({ params }: { params: Promise<{ symbol:
 
   return (
     <div className="space-y-4">
+      <StockTabs symbol={symbol} active="charts" />
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
         <div className="min-w-0">
           <p className="eyebrow">
@@ -57,7 +58,6 @@ export default async function ChartsPage({ params }: { params: Promise<{ symbol:
           </div>
         )}
       </div>
-      <StockTabs symbol={symbol} active="charts" />
       <ChartGallery data={data} />
     </div>
   );

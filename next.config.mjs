@@ -10,5 +10,7 @@ const nextConfig = {
    * metadata in <head>; it is static here, so nothing is lost by not streaming.
    */
   htmlLimitedBots: /.*/,
+  // Baked into the client so an open app can notice a newer deployment.
+  env: { NEXT_PUBLIC_BUILD_VERSION: process.env.VERCEL_GIT_COMMIT_SHA || 'dev' },
 };
 export default nextConfig;

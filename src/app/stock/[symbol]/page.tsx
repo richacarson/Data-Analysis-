@@ -91,6 +91,8 @@ export default async function StockPage({
 
   return (
     <div className="space-y-4">
+      <StockTabs symbol={report.symbol} active="valuation" />
+
       {/* Silently averaging whatever survived would misrepresent the result. */}
       {report.modelNotes.length > 0 && (
         <div className="border border-line bg-surface px-4 py-3">
@@ -166,8 +168,6 @@ export default async function StockPage({
         {/* The gold rule is the brand's one accent per view. */}
         <div className="h-px bg-gold/40" />
       </div>
-
-      <StockTabs symbol={report.symbol} active="valuation" />
 
       {/* ---- Verdict strip ---- */}
       <div className="panel stat-grid md:grid-cols-5">
