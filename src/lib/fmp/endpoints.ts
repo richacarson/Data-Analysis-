@@ -13,6 +13,7 @@ import type {
   KeyMetricsTTM,
   IndustryPe,
   Period,
+  PriceBar,
   PriceTargetConsensus,
   Profile,
   RatiosTTM,
@@ -73,6 +74,13 @@ export const getEarningsHistory = (symbol: string, limit = 40) =>
 /** Revenue split by product line, used for the stacked composition chart. */
 export const getRevenueSegments = (symbol: string, period: Period = 'annual') =>
   fmpList<RevenueSegment>('revenue-product-segmentation', { symbol, period });
+
+export const getGeographicSegments = (symbol: string, period: Period = 'annual') =>
+  fmpList<RevenueSegment>('revenue-geographic-segmentation', { symbol, period });
+
+/** Daily closes, newest first. Split-adjusted, so they line up with per-share history. */
+export const getPriceHistory = (symbol: string, from: string) =>
+  fmpList<PriceBar>('historical-price-eod/light', { symbol, from }, TTL.ratios);
 
 /** Prices for many symbols in one request, so a screen is not N calls. */
 export const getBatchQuotes = (symbols: string[]) =>

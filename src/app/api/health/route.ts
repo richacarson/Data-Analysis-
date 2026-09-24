@@ -26,6 +26,12 @@ const CHECKS: Array<{ name: string; endpoint: string; params: Record<string, str
     endpoint: 'revenue-product-segmentation',
     params: { symbol: 'AAPL', period: 'annual' },
   },
+  {
+    name: 'geographic segments',
+    endpoint: 'revenue-geographic-segmentation',
+    params: { symbol: 'AAPL', period: 'annual' },
+  },
+  { name: 'price history', endpoint: 'historical-price-eod/light', params: { symbol: 'AAPL', from: '2026-01-02' } },
   { name: 'annual ratios', endpoint: 'ratios', params: { symbol: 'AAPL', period: 'annual', limit: '3' } },
   {
     name: 'industry P/E history',

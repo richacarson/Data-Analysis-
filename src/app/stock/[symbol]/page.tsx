@@ -4,6 +4,7 @@ import { Badge, Panel, RangeBar, Row, Stat } from '@/components/ui';
 import { CashFlowChart, EpsProjectionChart, HistoryChart, ModelSpreadChart } from '@/components/Charts';
 import { SensitivityTable } from '@/components/SensitivityTable';
 import { ExpectedReturnPanel } from '@/components/ExpectedReturn';
+import { StockTabs } from '@/components/StockTabs';
 import {
   EpsHistoryChart,
   IndexedChart,
@@ -163,6 +164,8 @@ export default async function StockPage({
         {/* The gold rule is the brand's one accent per view. */}
         <div className="h-px bg-gold/40" />
       </div>
+
+      <StockTabs symbol={report.symbol} active="valuation" />
 
       {/* ---- Verdict strip ---- */}
       <div className="panel stat-grid md:grid-cols-5">

@@ -75,6 +75,7 @@ export interface CashFlowStatement {
   commonStockRepurchased: number;
   commonDividendsPaid: number;
   netDebtIssuance: number;
+  acquisitionsNet?: number;
 }
 
 export interface BalanceSheetStatement {
@@ -99,6 +100,8 @@ export interface BalanceSheetStatement {
   totalEquity: number;
   goodwill: number;
   intangibleAssets: number;
+  inventory?: number;
+  netReceivables?: number;
 }
 
 export interface EnterpriseValue {
@@ -268,4 +271,11 @@ export interface EarningsReport {
   epsEstimated: number | null;
   revenueActual: number | null;
   revenueEstimated: number | null;
+}
+
+export interface PriceBar {
+  symbol: string;
+  date: string;
+  price: number;
+  volume: number;
 }

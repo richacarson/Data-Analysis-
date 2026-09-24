@@ -95,6 +95,21 @@ const CHECKS = [
     fields: ['fiscalYear', 'data'],
   },
   {
+    endpoint: 'revenue-geographic-segmentation',
+    params: { symbol: SYMBOL, period: 'annual' },
+    fields: ['fiscalYear', 'data'],
+  },
+  {
+    endpoint: 'historical-price-eod/light',
+    params: { symbol: SYMBOL, from: '2026-01-02' },
+    fields: ['date', 'price'],
+  },
+  {
+    endpoint: 'income-statement',
+    params: { symbol: SYMBOL, period: 'quarter', limit: 2 },
+    fields: ['date', 'fiscalYear', 'period', 'revenue', 'epsDiluted'],
+  },
+  {
     endpoint: 'ratios',
     params: { symbol: SYMBOL, period: 'annual', limit: 3 },
     fields: ['priceToEarningsRatio', 'netIncomePerShare', 'fiscalYear'],
