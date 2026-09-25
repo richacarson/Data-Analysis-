@@ -2,18 +2,19 @@ import 'server-only';
 
 import {
   getAnnualRatios,
-  getBatchQuotes,
   getDividends,
   getEarningsHistory,
   getEstimates,
   getFxRate,
+  getIndustryPe,
+  getKeyMetricsTTM,
+  getProfile,
+  getRiskFreeRate,
 } from '../fmp/endpoints';
 import { forwardDividend } from '../valuation/dividends';
-import { adjustedPeHistory, annualAdjustedEps } from '../valuation/earnings-basis';
-import { fiscalYearLabeler, forwardEstimates, pickCoveredHorizon } from '../valuation/fiscal';
-import { expectedReturn, implausibleReturn, requiredExitMultiple } from '../valuation/expected-return';
-import { exitMultipleAnchors } from '../valuation/exit-multiple';
-import { DEFAULT_HORIZON_YEARS, DEFAULT_HURDLE } from '../valuation/build';
+import { forwardEstimates } from '../valuation/fiscal';
+import { houseReturn } from '../valuation/house';
+import { DEFAULT_ERP, DEFAULT_HORIZON_YEARS, DEFAULT_HURDLE } from '../valuation/build';
 
 export interface ScreenRow {
   symbol: string;
@@ -69,9 +70,10 @@ async function pooled<T, R>(
 /**
  * Expected return for every ticker given.
  *
- * Deliberately lighter than the full valuation: prices arrive in batched calls
- * and each ticker costs four more, so a 154-holding screen is a few hundred
- * requests rather than two thousand.
+ * Runs the same calculation as the stock page, on the same requests, so a row
+ * and its page agree (and whichever loads second is served from cache). Each
+ * ticker costs six calls; industry multiples, the risk-free rate and exchange
+ * rates are fetched once per run and shared.
  */
 export async function runScreen(
   symbols: string[],
@@ -79,29 +81,22 @@ export async function runScreen(
 ): Promise<ScreenRow[]> {
   const horizonYears = options.horizonYears ?? DEFAULT_HORIZON_YEARS;
   const hurdle = options.hurdle ?? DEFAULT_HURDLE;
+  const started = Date.now();
 
-  const prices = new Map<string, number>();
-  for (let i = 0; i < symbols.length; i += 50) {
-    const chunk = symbols.slice(i, i + 50);
-    try {
-      for (const q of await getBatchQuotes(chunk)) prices.set(q.symbol, q.price);
-    } catch {
-      // A failed chunk leaves those rows without a price rather than failing
-      // the whole screen.
-    }
-  }
-
-  // One rate per reporting currency, shared across the run.
-  const fx = new Map<string, Promise<number | null>>();
-  const rateToUsd = (currency: string) => {
-    if (!fx.has(currency)) fx.set(currency, getFxRate(currency, 'USD'));
-    return fx.get(currency)!;
+  const once = <T,>(cache: Map<string, Promise<T>>, key: string, load: () => Promise<T>) => {
+    if (!cache.has(key)) cache.set(key, load());
+    return cache.get(key)!;
   };
+  const fx = new Map<string, Promise<number | null>>();
+  const industries = new Map<string, Promise<Array<{ date: string; pe: number }>>>();
+  const riskFree = getRiskFreeRate();
+  const yearAgo = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
 
   return pooled(symbols, 12, async (symbol): Promise<ScreenRow> => {
     const base: ScreenRow = {
       symbol,
-      price: prices.get(symbol) ?? null,
+      price: null,
       epsAtHorizon: null,
       horizonFiscalYear: null,
       analystCount: 0,
@@ -116,122 +111,84 @@ export async function runScreen(
       anchorsDisagree: false,
     };
 
+    // A cold run is paced to FMP's rate limit. Past four minutes, stop starting
+    // new tickers and say so: everything fetched so far is cached, so a reload
+    // finishes the rest in seconds instead of the page timing out.
+    if (Date.now() - started > 240_000) {
+      return { ...base, note: 'Still loading. Reload in a minute to finish.' };
+    }
+
     try {
-      const [estimates, annual, dividends, earnings] = await Promise.all([
+      const [profile, estimates, annual, dividends, earnings, metrics] = await Promise.all([
+        getProfile(symbol),
         getEstimates(symbol, 'annual', 10),
         getAnnualRatios(symbol, 10),
         getDividends(symbol).catch(() => []),
         getEarningsHistory(symbol, 44).catch(() => []),
+        getKeyMetricsTTM(symbol).catch(() => null),
       ]);
 
-      /*
-       * ADRs report in their home currency while the quote is in dollars:
-       * Taiwan Semiconductor's consensus arrives in New Taiwan dollars. The
-       * estimate is converted before it meets the price. The adjusted P/E
-       * history is skipped for them too — the earnings feed's currency is not
-       * dependable for ADRs — and FMP's own P/E, a ratio, is used instead.
-       */
-      const reportedCurrency = (annual.find((r) => r.reportedCurrency)?.reportedCurrency ?? 'USD').toUpperCase();
-      const foreign = reportedCurrency !== 'USD';
-      const rate = foreign ? await rateToUsd(reportedCurrency) : 1;
+      const price = profile?.price ?? null;
+      if (!price || !(price > 0)) return { ...base, note: 'No price' };
+      const dividendYield = forwardDividend(dividends, price).yield;
 
-      // Same fiscal-year handling as the stock page, so the two agree.
-      const fiscalYearEnds = annual.map((r) => ({ date: r.date, fiscalYear: r.fiscalYear }));
-      const fiscalYearOf = fiscalYearLabeler(fiscalYearEnds);
-      const lastReported = annual.reduce<string | null>(
-        (latest, r) => (latest === null || r.date > latest ? r.date : latest),
-        null,
-      );
-      const chosen = pickCoveredHorizon(forwardEstimates(estimates, lastReported), horizonYears);
-      const horizon = chosen?.estimate ?? null;
-      const years = chosen?.years ?? horizonYears;
-      const horizonNote = chosen?.skipped
-        ? `FY${fiscalYearOf(chosen.skipped.estimate.date)} has ${chosen.skipped.analysts} analyst${chosen.skipped.analysts === 1 ? '' : 's'}; using FY${horizon ? fiscalYearOf(horizon.date) : ''}`
-        : undefined;
+      // ADRs report at home and quote in dollars; consensus is converted.
+      const reported = (annual.find((r) => r.reportedCurrency)?.reportedCurrency ?? profile?.currency ?? 'USD').toUpperCase();
+      const quote = (profile?.currency || 'USD').toUpperCase();
+      const rate = reported === quote ? 1 : await once(fx, `${reported}${quote}`, () => getFxRate(reported, quote));
+      if (!rate) return { ...base, price, dividendYield, note: `Reports in ${reported}; no exchange rate to convert` };
 
-      // Consensus is adjusted, so the historical multiple is too where the
-      // quarterly history allows; the ratios feed's P/E is GAAP.
-      const adjustedPes = adjustedPeHistory(
-        annual
-          .filter((r) => r.priceToEarningsRatio * r.netIncomePerShare > 0)
-          .map((r) => ({
-            year: fiscalYearOf(r.date),
-            price: r.priceToEarningsRatio * r.netIncomePerShare,
-          })),
-        annualAdjustedEps(earnings, fiscalYearEnds),
-      );
-      const anchors = exitMultipleAnchors({
-        ownHistory:
-          !foreign && adjustedPes.length >= 3 ? adjustedPes : annual.map((r) => r.priceToEarningsRatio),
-      });
+      const industryPe = profile?.industry
+        ? await once(industries, profile.industry, () => getIndustryPe(profile.industry, yearAgo, today).catch(() => []))
+        : [];
 
-      const price = base.price;
-      const dividendYield = price ? forwardDividend(dividends, price).yield : 0;
-
-      if (!horizon || !(horizon.epsAvg > 0)) {
-        return { ...base, dividendYield, note: 'No positive consensus EPS at the horizon' };
-      }
-      if (!price || !(price > 0)) return { ...base, dividendYield, note: 'No price' };
-      if (!rate) {
-        return { ...base, dividendYield, note: `Reports in ${reportedCurrency}; no exchange rate to convert` };
-      }
-      const epsAtHorizon = horizon.epsAvg * rate;
-
-      const exitPe = anchors.recommended;
-      const result = exitPe
-        ? expectedReturn({
-            price,
-            epsAtHorizon,
-            exitMultiple: exitPe,
-            dividendYield,
-            years,
-          })
-        : null;
-      const required = requiredExitMultiple(
+      const lastReported = annual.reduce<string | null>((a, r) => (a === null || r.date > a ? r.date : a), null);
+      const house = houseReturn({
         price,
-        epsAtHorizon,
+        forward: forwardEstimates(estimates, lastReported),
+        annual,
+        earnings,
+        industryPe,
+        roic: metrics?.returnOnInvestedCapitalTTM ?? 0,
+        beta: profile?.beta || 1,
+        riskFreeRate: await riskFree,
+        equityRiskPremium: DEFAULT_ERP,
+        dividendYield,
+        horizonYears,
         hurdle,
-        dividendYield,
-        years,
-      );
-
-      const review = implausibleReturn({
-        exitPe,
-        totalCagr: result?.totalCagr ?? null,
-        requiredExitPe: required,
+        fxRate: rate,
+        foreign: reported !== quote,
       });
-      if (review) {
-        return {
-          ...base,
-          dividendYield,
-          epsAtHorizon,
-          horizonFiscalYear: fiscalYearOf(horizon.date),
-          analystCount: horizon.numAnalystsEps,
-          exitPe,
-          review: `Held for review: ${review}`,
-          note: `Held for review: ${review}`,
-          convertedFrom: foreign ? reportedCurrency : undefined,
-        };
-      }
 
-      return {
+      const common: ScreenRow = {
         ...base,
+        price,
         dividendYield,
-        horizonNote,
-        convertedFrom: foreign ? reportedCurrency : undefined,
-        epsAtHorizon,
-        horizonFiscalYear: fiscalYearOf(horizon.date),
-        analystCount: horizon.numAnalystsEps,
-        exitPe,
-        exitPeSource: anchors.recommendedSource,
-        ownMedianPe: anchors.anchors.find((a) => a.label === 'Own 10-year median')?.value ?? null,
-        anchorsDisagree: anchors.anchorsDisagree,
-        expectedCagr: result?.totalCagr ?? null,
+        epsAtHorizon: house.epsAtHorizon,
+        horizonFiscalYear: house.horizon?.fiscalYear ?? null,
+        analystCount: house.horizon?.estimate.numAnalystsEps ?? 0,
+        exitPe: house.exitPe,
+        exitPeSource: house.exitPeSource,
+        ownMedianPe: house.anchors.anchors.find((a) => a.label === 'Own 10-year median')?.value ?? null,
+        anchorsDisagree: house.anchors.anchorsDisagree,
+        horizonNote: house.horizonNote ?? undefined,
+        convertedFrom: reported !== quote ? reported : undefined,
+      };
+
+      if (house.epsAtHorizon === null) return { ...common, note: 'No positive consensus EPS at the horizon' };
+      if (house.review) return { ...common, review: house.review, note: house.review };
+      if (house.exitPe === null) return { ...common, note: 'No usable exit multiple' };
+
+      const cagr = house.expected?.totalCagr ?? null;
+      const required = house.requiredExitMultiple;
+      return {
+        ...common,
+        expectedCagr: cagr,
         requiredExitPe: required,
-        // Above zero means the price needs a re-rating beyond what the company
-        // has historically traded at just to deliver the hurdle.
-        stretch: required && exitPe ? required / exitPe - 1 : null,
-        clearsHurdle: result ? result.totalCagr >= hurdle : null,
+        // Above zero means the price needs a re-rating beyond the anchor just
+        // to deliver the hurdle.
+        stretch: required && house.exitPe ? required / house.exitPe - 1 : null,
+        clearsHurdle: cagr !== null ? cagr >= hurdle : null,
       };
     } catch (error) {
       return {

@@ -25,8 +25,9 @@ export function ExpectedReturnPanel({
     return (
       <Panel eyebrow="Expected return" title={`${expected.horizonYears}-year total return`}>
         <p className="px-4 py-6 text-[12px] leading-relaxed text-t3">
-          Not available. This needs consensus earnings at the horizon and an exit multiple that
-          can be compared to the quoted price.
+          {expected.review
+            ? `${expected.review}. Output this far outside the plausible range points to a data problem — a currency mix-up or a broken multiple history — so it is not shown as a result.`
+            : 'Not available. This needs consensus earnings at the horizon and an exit multiple that can be compared to the quoted price.'}
         </p>
       </Panel>
     );
@@ -40,7 +41,9 @@ export function ExpectedReturnPanel({
       title={`${expected.horizonYears}-year total return`}
       subtitle={`FY${expected.horizonFiscalYear} consensus · ${expected.analystCount} ${
         expected.analystCount === 1 ? 'analyst' : 'analysts'
-      } · year ends in ${num(expected.yearsToHorizon, 1)} years`}
+      } · year ends in ${num(expected.yearsToHorizon, 1)} years${
+        expected.convertedFrom ? ` · converted from ${expected.convertedFrom}` : ''
+      }`}
     >
       {expected.horizonNote && (
         <div className="border-b border-line bg-warn/[0.08] px-4 py-3">

@@ -7,6 +7,7 @@ import {
   getFinancialScores,
   getEarningsHistory,
   getDividends,
+  getFxRate,
   getIncomeStatements,
   getIndustryPe,
   getRevenueSegments,
@@ -44,6 +45,7 @@ import { fairValueRange, grahamIsInformative } from './blend';
 import { latestCapexSplit } from './capex';
 import { fiscalYearLabeler, forwardEstimates, pickCoveredHorizon } from './fiscal';
 import { forwardDividend } from './dividends';
+import { houseReturn } from './house';
 import {
   adjustedPeHistory,
   annualAdjustedEps,
@@ -357,18 +359,9 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
    */
   const horizonYears = overrides.horizonYears ?? DEFAULT_HORIZON_YEARS;
   const hurdle = overrides.hurdle ?? DEFAULT_HURDLE;
-  // Forward yield from declared payments; the trailing ratio only if the
-  // dividend history is unavailable.
+  // Forward yield from declared payments, exactly as the screen computes it.
   const dividend = forwardDividend(dividends, price);
-  const dividendYield = dividend.method !== 'none' ? dividend.yield : dividends.length ? 0 : (ratios?.dividendYieldTTM ?? 0);
-
-  // The forecast year ending closest to the horizon, and the real time to it.
-  const horizon = pickCoveredHorizon(sortedEstimates, horizonYears);
-  const horizonNote = horizon?.skipped
-    ? `FY${fiscalYearOf(horizon.skipped.estimate.date)} rests on ${horizon.skipped.analysts} analyst${horizon.skipped.analysts === 1 ? '' : 's'}, too thin to anchor on, so the horizon is FY${fiscalYearOf(horizon.estimate.date)}.`
-    : null;
-  const horizonEstimate = horizon?.estimate ?? null;
-  const yearsToHorizon = horizon?.years ?? horizonYears;
+  const dividendYield = dividend.yield;
 
   /*
    * Consensus is quoted on an adjusted basis, so the historical multiple has to
@@ -447,83 +440,52 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
   );
 
 
-  // Industry P/E arrives per exchange per day; reduce to one number.
-  let industryPeNow: number | null = null;
-  let industryPeMedian: number | null = null;
-  if (profile.industry) {
-    const to = new Date();
-    const from = new Date(to.getTime() - 365 * 24 * 60 * 60 * 1000);
-    const iso = (d: Date) => d.toISOString().slice(0, 10);
-    const rows = await optional(
-      'industry P/E',
-      getIndustryPe(profile.industry, iso(from), iso(to)),
-      [],
-    );
-    if (rows.length) {
-      const latestDate = rows.reduce((a, r) => (r.date > a ? r.date : a), rows[0].date);
-      industryPeNow = median(rows.filter((r) => r.date === latestDate).map((r) => r.pe));
-      industryPeMedian = median(rows.map((r) => r.pe));
-    }
-  }
+  // Industry P/E over the past year; the shared calculation reduces it.
+  const industryRows = profile.industry
+    ? await optional(
+        'industry P/E',
+        getIndustryPe(
+          profile.industry,
+          new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10),
+          new Date().toISOString().slice(0, 10),
+        ),
+        [],
+      )
+    : [];
 
   /*
-   * The justified multiple is a perpetuity, so it needs a sustainable growth
-   * rate rather than the next three years' forecast. Feeding it a 19% near-term
-   * rate against a 10% cost of equity makes the formula undefined precisely for
-   * the fast growers where the anchor is most wanted, so growth is capped below
-   * the discount rate and below what the returns on capital can fund.
+   * ADRs report in their home currency and are quoted in dollars. Rather than
+   * withhold the expected return, consensus is converted at FMP's rate; the
+   * cash-flow models, which need whole statements converted, stay withheld.
    */
-  const sustainableGrowth = Math.max(
-    0,
-    Math.min(forwardEpsCagr ?? 0, roic * 0.9, capital.costOfEquity - 0.02),
-  );
-  const justifiedPe = justifiedPriceEarnings(roic, sustainableGrowth, capital.costOfEquity);
+  const reportingCurrency = (latestIncome?.reportedCurrency ?? profile.currency ?? 'USD').toUpperCase();
+  const quoteCurrency = (profile.currency || 'USD').toUpperCase();
+  const fxRate =
+    reportingCurrency === quoteCurrency
+      ? 1
+      : await optional('exchange rate', getFxRate(reportingCurrency, quoteCurrency), null);
 
-  const anchors = exitMultipleAnchors({
-    ownHistory: ownPeHistory,
-    industryPe: industryPeNow,
-    industryMedian: industryPeMedian,
-    justified: justifiedPe,
-    industryNotComparable:
-      peBasis === 'adjusted' && basis.materialGap && basis.medianRatio
-        ? `Excluded: industry multiples are computed on GAAP earnings, and this company's adjusted earnings run ${basis.medianRatio.toFixed(2)}x GAAP. Applied to adjusted consensus they would overstate the exit price.`
-        : null,
+  // The house method, shared with the screen so the two always agree.
+  const house = houseReturn({
+    price,
+    forward: sortedEstimates,
+    annual: annualRatios,
+    earnings: earningsHistory,
+    industryPe: industryRows,
+    roic,
+    beta: profile.beta || 1,
+    riskFreeRate,
+    equityRiskPremium,
+    dividendYield,
+    horizonYears,
+    hurdle,
+    fxRate: fxRate ?? 1,
+    foreign: reportingCurrency !== quoteCurrency,
+    exitPeOverride: overrides.exitPe,
   });
-
-  const exitPe = overrides.exitPe ?? anchors.recommended ?? null;
-  const epsAtHorizon = horizonEstimate?.epsAvg ?? null;
-
-  const expected =
-    exitPe !== null && epsAtHorizon !== null && unitsComparable
-      ? expectedReturn({
-          price,
-          epsAtHorizon,
-          exitMultiple: exitPe,
-          dividendYield,
-          years: yearsToHorizon,
-        })
-      : null;
-
-  const mustBelieve =
-    epsAtHorizon !== null && unitsComparable
-      ? requiredExitMultiple(price, epsAtHorizon, hurdle, dividendYield, yearsToHorizon)
-      : null;
-
-  const scenarios =
-    horizonEstimate && unitsComparable && exitPe !== null
-      ? scenarioGrid(
-          price,
-          [
-            { label: 'Analyst low', eps: horizonEstimate.epsLow },
-            { label: 'Consensus', eps: horizonEstimate.epsAvg },
-            { label: 'Analyst high', eps: horizonEstimate.epsHigh },
-          ],
-          [exitPe * 0.8, exitPe, exitPe * 1.2],
-          dividendYield,
-          yearsToHorizon,
-          hurdle,
-        )
-      : null;
+  const houseUsable = fxRate !== null;
+  const expected = houseUsable ? house.expected : null;
+  const yearsToHorizon = house.horizon?.years ?? horizonYears;
 
   // ---- Chart series --------------------------------------------------------
   const ttm = trailingTwelveMonths(
@@ -661,27 +623,29 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     expectedReturn: {
       horizonYears,
       yearsToHorizon,
-      horizonNote,
+      horizonNote: house.horizonNote,
       dividendMethod: dividend.method,
       hurdle,
       dividendYield,
-      epsAtHorizon,
-      horizonFiscalYear: horizonEstimate ? fiscalYearOf(horizonEstimate.date) : null,
-      analystCount: horizonEstimate?.numAnalystsEps ?? 0,
-      exitPe,
-      exitPeSource: overrides.exitPe !== undefined ? 'Manual override' : anchors.recommendedSource,
-      anchors: anchors.anchors,
-      peBasis,
-      basis,
-      anchorsDisagree: anchors.anchorsDisagree,
-      anchorSpread: anchors.spread,
-      disagreementNote: anchors.disagreementNote,
-      sustainableGrowth,
-      result: expected,
-      requiredExitMultiple: mustBelieve,
+      epsAtHorizon: houseUsable ? house.epsAtHorizon : null,
+      convertedFrom: reportingCurrency !== quoteCurrency && houseUsable ? reportingCurrency : null,
+      horizonFiscalYear: house.horizon?.fiscalYear ?? null,
+      analystCount: house.horizon?.estimate.numAnalystsEps ?? 0,
+      exitPe: house.exitPe,
+      exitPeSource: house.exitPeSource,
+      anchors: house.anchors.anchors,
+      peBasis: house.peBasis,
+      basis: house.basis,
+      anchorsDisagree: house.anchors.anchorsDisagree,
+      anchorSpread: house.anchors.spread,
+      disagreementNote: house.anchors.disagreementNote,
+      sustainableGrowth: house.sustainableGrowth,
+      review: house.review,
+      result: house.review ? null : expected,
+      requiredExitMultiple: houseUsable ? house.requiredExitMultiple : null,
       requiredDiscount: requiredDiscount(hurdle, dividendYield, yearsToHorizon),
-      scenarios,
-      clearsHurdle: expected ? expected.totalCagr >= hurdle : null,
+      scenarios: houseUsable && !house.review ? house.scenarios : null,
+      clearsHurdle: expected && !house.review ? expected.totalCagr >= hurdle : null,
     },
 
     valueRange,

@@ -102,7 +102,7 @@ export default async function ScreenPage({
       <Panel
         eyebrow="Ranked"
         title="Expected 3-year total return"
-        subtitle="Exit multiple = median of the company's own P/E history"
+        subtitle="Same calculation as each stock page: median of own, industry and justified P/E"
       >
         <ScreenTable rows={rows} hurdle={hurdle} />
       </Panel>

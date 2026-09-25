@@ -7,7 +7,7 @@ export default function Loading() {
         <SkeletonBlock className="h-2.5 w-28" />
         <SkeletonBlock className="mt-2.5 h-6 w-40" />
         <p className="mt-3 text-[12px] text-t4">
-          Scoring every holding against consensus. The first run after a while takes a minute or so, paced to stay inside the data provider’s rate limit; after that it is instant.
+          Scoring every holding against consensus. The first run after a while takes a couple of minutes, paced to stay inside the data provider’s rate limit; after that it is quick.
         </p>
       </div>
       <SkeletonStats count={4} />
