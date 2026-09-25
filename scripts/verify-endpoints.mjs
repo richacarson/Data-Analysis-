@@ -100,6 +100,16 @@ const CHECKS = [
     fields: ['date', 'revenueAvg', 'ebitdaAvg', 'ebitAvg', 'netIncomeAvg', 'epsAvg'],
   },
   {
+    endpoint: 'dividends',
+    params: { symbol: SYMBOL, limit: 4 },
+    fields: ['date', 'dividend', 'frequency'],
+  },
+  {
+    endpoint: 'quote-short',
+    params: { symbol: 'TWDUSD' },
+    fields: ['symbol', 'price'],
+  },
+  {
     endpoint: 'revenue-geographic-segmentation',
     params: { symbol: SYMBOL, period: 'annual' },
     fields: ['fiscalYear', 'data'],

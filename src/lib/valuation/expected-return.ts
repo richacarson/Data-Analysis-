@@ -215,3 +215,20 @@ export function expectedReturnFromRevenue(input: {
   const result = expectedReturn({ ...input, epsAtHorizon: impliedEps });
   return result ? { ...result, impliedEps } : null;
 }
+
+/**
+ * Output no sane consensus and multiple produce: a currency mismatch or a
+ * broken feed. Taiwan Semiconductor scored +903% on EPS in New Taiwan dollars
+ * against a price in US dollars. Such rows are held for review rather than
+ * ranked, because one of them tops every list it appears in.
+ */
+export function implausibleReturn(input: {
+  exitPe: number | null;
+  totalCagr: number | null;
+  requiredExitPe?: number | null;
+}): string | null {
+  if (input.exitPe !== null && input.exitPe > 200) return `exit multiple of ${input.exitPe.toFixed(0)}x`;
+  if (input.totalCagr !== null && input.totalCagr > 1) return `expected return of ${(input.totalCagr * 100).toFixed(0)}% a year`;
+  if (input.requiredExitPe && input.requiredExitPe > 500) return `required multiple of ${input.requiredExitPe.toFixed(0)}x`;
+  return null;
+}

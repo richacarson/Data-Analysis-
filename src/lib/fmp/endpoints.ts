@@ -14,6 +14,7 @@ import type {
   IndustryPe,
   Period,
   PriceBar,
+  DividendRecord,
   PriceTargetConsensus,
   Profile,
   RatiosTTM,
@@ -104,6 +105,27 @@ export async function getPriceHistory(symbol: string, from: string): Promise<Pri
   const byDate = new Map<string, PriceBar>();
   for (const bar of parts.flat()) byDate.set(bar.date, bar);
   return [...byDate.values()];
+}
+
+/** Declared dividends, newest first, including any already announced. */
+export const getDividends = (symbol: string) =>
+  fmpList<DividendRecord>('dividends', { symbol, limit: 12 }, TTL.estimates);
+
+/**
+ * Units of `to` per unit of `from` (TWD→USD ≈ 0.0315). FMP quotes some pairs
+ * only one way round, so the inverse is tried before giving up.
+ */
+export async function getFxRate(from: string, to: string): Promise<number | null> {
+  if (from === to) return 1;
+  const read = async (pair: string) => {
+    const rows = await fmpList<{ symbol: string; price: number }>('quote-short', { symbol: pair }, TTL.profile).catch(() => []);
+    const price = rows[0]?.price;
+    return typeof price === 'number' && price > 0 ? price : null;
+  };
+  const direct = await read(`${from}${to}`);
+  if (direct) return direct;
+  const inverse = await read(`${to}${from}`);
+  return inverse ? 1 / inverse : null;
 }
 
 /** Prices for many symbols in one request, so a screen is not N calls. */

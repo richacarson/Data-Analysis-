@@ -32,6 +32,9 @@ export default async function ScreenPage({
   const rows = await runScreen(tickers, { hurdle });
 
   const scored = rows.filter((r) => r.expectedCagr !== null);
+  // Implausible outputs (a currency mix-up, a broken feed) are kept out of
+  // every count and the median rather than topping the ranking.
+  const held = rows.filter((r) => r.review);
   const clearing = scored.filter((r) => r.clearsHurdle);
   const median =
     scored.length > 0
@@ -88,7 +91,11 @@ export default async function ScreenPage({
         <Stat
           label="Not scored"
           value={String(rows.length - scored.length)}
-          sub="No consensus, price or usable multiple"
+          sub={
+            held.length
+              ? `${held.length} held for review · the rest lack consensus, price or a usable multiple`
+              : 'No consensus, price or usable multiple'
+          }
         />
       </div>
 

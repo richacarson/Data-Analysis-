@@ -276,3 +276,13 @@ describe('justified P/E for fast growers', () => {
     expect(high).toBeGreaterThan(low);
   });
 });
+
+describe('implausibleReturn', () => {
+  it('holds a currency-mismatched row for review', async () => {
+    const { implausibleReturn } = await import('../expected-return');
+    // TSM: consensus in New Taiwan dollars against a dollar price.
+    expect(implausibleReturn({ exitPe: 769.7, totalCagr: 9.03 })).toMatch(/exit multiple of 770x/);
+    expect(implausibleReturn({ exitPe: 22, totalCagr: 1.2 })).toMatch(/120% a year/);
+    expect(implausibleReturn({ exitPe: 22, totalCagr: 0.18, requiredExitPe: 19 })).toBeNull();
+  });
+});

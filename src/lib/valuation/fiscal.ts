@@ -106,3 +106,46 @@ export function pickHorizon<T extends { date: string }>(
 
   return best;
 }
+
+/** Estimates need this many analysts before they anchor a horizon. */
+export const MIN_ANALYSTS = 3;
+/** ...and at least this share of the company's best-covered forecast year. */
+export const MIN_COVERAGE_SHARE = 0.3;
+
+export interface CoveredHorizon<T> extends HorizonChoice<T> {
+  /** Set when the year nearest the horizon was too thinly covered to use. */
+  skipped: { estimate: T; analysts: number } | null;
+}
+
+/**
+ * The horizon year, restricted to estimates with real coverage.
+ *
+ * FMP's furthest years often rest on one or two analysts and do not hang
+ * together: Keysight's FY2029 was a single analyst at $11.18 (below its own
+ * FY2028), Fortinet's FY2029 sat below FY2028 on 5 analysts against 25 for
+ * FY2027. Where coverage is solid FMP agrees with other sources — Freeport's
+ * FY2028 is $4.46 on 10 analysts against Seeking Alpha's $4.49. So a year
+ * counts only with at least three analysts and at least 30% of the
+ * best-covered year; otherwise the horizon steps back to the furthest year
+ * that does, and the return is measured over that shorter holding period.
+ */
+export function pickCoveredHorizon<T extends { date: string; numAnalystsEps?: number }>(
+  forward: T[],
+  horizonYears: number,
+  today: Date = new Date(),
+): CoveredHorizon<T> | null {
+  const nominal = pickHorizon(forward, horizonYears, today);
+  if (!nominal) return null;
+  const peak = Math.max(0, ...forward.map((e) => e.numAnalystsEps ?? 0));
+  const covered = forward.filter((e) => {
+    const n = e.numAnalystsEps ?? 0;
+    return n >= MIN_ANALYSTS && n >= peak * MIN_COVERAGE_SHARE;
+  });
+  const choice = pickHorizon(covered, horizonYears, today);
+  if (!choice) return { ...nominal, skipped: null };
+  const skipped =
+    choice.estimate === nominal.estimate
+      ? null
+      : { estimate: nominal.estimate, analysts: nominal.estimate.numAnalystsEps ?? 0 };
+  return { ...choice, skipped };
+}

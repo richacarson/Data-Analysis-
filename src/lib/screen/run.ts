@@ -3,13 +3,15 @@ import 'server-only';
 import {
   getAnnualRatios,
   getBatchQuotes,
+  getDividends,
   getEarningsHistory,
   getEstimates,
-  getRatiosTTM,
+  getFxRate,
 } from '../fmp/endpoints';
+import { forwardDividend } from '../valuation/dividends';
 import { adjustedPeHistory, annualAdjustedEps } from '../valuation/earnings-basis';
-import { fiscalYearLabeler, forwardEstimates, pickHorizon } from '../valuation/fiscal';
-import { expectedReturn, requiredExitMultiple } from '../valuation/expected-return';
+import { fiscalYearLabeler, forwardEstimates, pickCoveredHorizon } from '../valuation/fiscal';
+import { expectedReturn, implausibleReturn, requiredExitMultiple } from '../valuation/expected-return';
 import { exitMultipleAnchors } from '../valuation/exit-multiple';
 import { DEFAULT_HORIZON_YEARS, DEFAULT_HURDLE } from '../valuation/build';
 
@@ -30,6 +32,12 @@ export interface ScreenRow {
   clearsHurdle: boolean | null;
   /** Anchors more than a factor of two apart; the chosen multiple is doing real work. */
   anchorsDisagree: boolean;
+  /** Why the horizon is shorter than asked: the nearer year lacked coverage. */
+  horizonNote?: string;
+  /** Held out of the ranking: the output is implausible and needs a look. */
+  review?: string;
+  /** Reporting currency, where it differs from the dollar quote. */
+  convertedFrom?: string;
   note?: string;
 }
 
@@ -83,6 +91,13 @@ export async function runScreen(
     }
   }
 
+  // One rate per reporting currency, shared across the run.
+  const fx = new Map<string, Promise<number | null>>();
+  const rateToUsd = (currency: string) => {
+    if (!fx.has(currency)) fx.set(currency, getFxRate(currency, 'USD'));
+    return fx.get(currency)!;
+  };
+
   return pooled(symbols, 12, async (symbol): Promise<ScreenRow> => {
     const base: ScreenRow = {
       symbol,
@@ -102,12 +117,23 @@ export async function runScreen(
     };
 
     try {
-      const [estimates, annual, ttm, earnings] = await Promise.all([
+      const [estimates, annual, dividends, earnings] = await Promise.all([
         getEstimates(symbol, 'annual', 10),
         getAnnualRatios(symbol, 10),
-        getRatiosTTM(symbol),
+        getDividends(symbol).catch(() => []),
         getEarningsHistory(symbol, 44).catch(() => []),
       ]);
+
+      /*
+       * ADRs report in their home currency while the quote is in dollars:
+       * Taiwan Semiconductor's consensus arrives in New Taiwan dollars. The
+       * estimate is converted before it meets the price. The adjusted P/E
+       * history is skipped for them too — the earnings feed's currency is not
+       * dependable for ADRs — and FMP's own P/E, a ratio, is used instead.
+       */
+      const reportedCurrency = (annual.find((r) => r.reportedCurrency)?.reportedCurrency ?? 'USD').toUpperCase();
+      const foreign = reportedCurrency !== 'USD';
+      const rate = foreign ? await rateToUsd(reportedCurrency) : 1;
 
       // Same fiscal-year handling as the stock page, so the two agree.
       const fiscalYearEnds = annual.map((r) => ({ date: r.date, fiscalYear: r.fiscalYear }));
@@ -116,9 +142,12 @@ export async function runScreen(
         (latest, r) => (latest === null || r.date > latest ? r.date : latest),
         null,
       );
-      const chosen = pickHorizon(forwardEstimates(estimates, lastReported), horizonYears);
+      const chosen = pickCoveredHorizon(forwardEstimates(estimates, lastReported), horizonYears);
       const horizon = chosen?.estimate ?? null;
       const years = chosen?.years ?? horizonYears;
+      const horizonNote = chosen?.skipped
+        ? `FY${fiscalYearOf(chosen.skipped.estimate.date)} has ${chosen.skipped.analysts} analyst${chosen.skipped.analysts === 1 ? '' : 's'}; using FY${horizon ? fiscalYearOf(horizon.date) : ''}`
+        : undefined;
 
       // Consensus is adjusted, so the historical multiple is too where the
       // quarterly history allows; the ratios feed's P/E is GAAP.
@@ -133,22 +162,26 @@ export async function runScreen(
       );
       const anchors = exitMultipleAnchors({
         ownHistory:
-          adjustedPes.length >= 3 ? adjustedPes : annual.map((r) => r.priceToEarningsRatio),
+          !foreign && adjustedPes.length >= 3 ? adjustedPes : annual.map((r) => r.priceToEarningsRatio),
       });
 
       const price = base.price;
-      const dividendYield = ttm?.dividendYieldTTM ?? 0;
+      const dividendYield = price ? forwardDividend(dividends, price).yield : 0;
 
       if (!horizon || !(horizon.epsAvg > 0)) {
         return { ...base, dividendYield, note: 'No positive consensus EPS at the horizon' };
       }
       if (!price || !(price > 0)) return { ...base, dividendYield, note: 'No price' };
+      if (!rate) {
+        return { ...base, dividendYield, note: `Reports in ${reportedCurrency}; no exchange rate to convert` };
+      }
+      const epsAtHorizon = horizon.epsAvg * rate;
 
       const exitPe = anchors.recommended;
       const result = exitPe
         ? expectedReturn({
             price,
-            epsAtHorizon: horizon.epsAvg,
+            epsAtHorizon,
             exitMultiple: exitPe,
             dividendYield,
             years,
@@ -156,16 +189,37 @@ export async function runScreen(
         : null;
       const required = requiredExitMultiple(
         price,
-        horizon.epsAvg,
+        epsAtHorizon,
         hurdle,
         dividendYield,
         years,
       );
 
+      const review = implausibleReturn({
+        exitPe,
+        totalCagr: result?.totalCagr ?? null,
+        requiredExitPe: required,
+      });
+      if (review) {
+        return {
+          ...base,
+          dividendYield,
+          epsAtHorizon,
+          horizonFiscalYear: fiscalYearOf(horizon.date),
+          analystCount: horizon.numAnalystsEps,
+          exitPe,
+          review: `Held for review: ${review}`,
+          note: `Held for review: ${review}`,
+          convertedFrom: foreign ? reportedCurrency : undefined,
+        };
+      }
+
       return {
         ...base,
         dividendYield,
-        epsAtHorizon: horizon.epsAvg,
+        horizonNote,
+        convertedFrom: foreign ? reportedCurrency : undefined,
+        epsAtHorizon,
         horizonFiscalYear: fiscalYearOf(horizon.date),
         analystCount: horizon.numAnalystsEps,
         exitPe,

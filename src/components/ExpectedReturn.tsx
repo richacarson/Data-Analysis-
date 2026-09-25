@@ -42,6 +42,12 @@ export function ExpectedReturnPanel({
         expected.analystCount === 1 ? 'analyst' : 'analysts'
       } · year ends in ${num(expected.yearsToHorizon, 1)} years`}
     >
+      {expected.horizonNote && (
+        <div className="border-b border-line bg-warn/[0.08] px-4 py-3">
+          <Badge tone="flat">Horizon shortened for coverage</Badge>
+          <p className="mt-2 text-[12px] leading-relaxed text-t3">{expected.horizonNote}</p>
+        </div>
+      )}
       {expected.analystCount > 0 && expected.analystCount < 3 && (
         <div className="border-b border-line bg-dn/[0.08] px-4 py-3">
           <Badge tone="neg">
@@ -97,7 +103,9 @@ export function ExpectedReturnPanel({
           label="Expected CAGR"
           value={pct(result.totalCagr)}
           tone={result.totalCagr - expected.hurdle}
-          sub={`${pct(result.priceCagr)} price + ${pct(expected.dividendYield)} yield`}
+          sub={`${pct(result.priceCagr)} price + ${pct(expected.dividendYield)} ${
+            expected.dividendMethod === 'trailing' ? 'trailing' : 'forward'
+          } yield`}
         />
         <Stat
           label={`Target price ${expected.horizonFiscalYear ?? ''}`}

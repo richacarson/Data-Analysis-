@@ -122,6 +122,7 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
                     {r.expectedCagr !== null ? signedPct(r.expectedCagr) : '—'}
                   </span>
                 </div>
+                {r.horizonNote && <p className="mt-1 text-[11px] text-warn">{r.horizonNote}</p>}
                 {r.expectedCagr !== null ? (
                   <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] tabular-nums text-t4">
                     <span>
@@ -194,6 +195,16 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
                       <>
                         {num(r.epsAtHorizon)}
                         <span className="ml-1 text-[10px] text-t4">FY{r.horizonFiscalYear}</span>
+                        {r.horizonNote && (
+                          <span className="ml-1 text-[10px] text-warn" title={r.horizonNote}>
+                            ↓
+                          </span>
+                        )}
+                        {r.convertedFrom && (
+                          <span className="ml-1 text-[10px] text-t4" title={`Consensus in ${r.convertedFrom}, converted to USD`}>
+                            {r.convertedFrom}→$
+                          </span>
+                        )}
                         {/* Thin coverage undermines everything downstream of it,
                             and is invisible once a row is just a number. */}
                         {r.analystCount > 0 && r.analystCount < 3 && (

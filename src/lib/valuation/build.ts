@@ -6,6 +6,7 @@ import {
   getEstimates,
   getFinancialScores,
   getEarningsHistory,
+  getDividends,
   getIncomeStatements,
   getIndustryPe,
   getRevenueSegments,
@@ -41,7 +42,8 @@ import {
 import { exitMultipleAnchors, median } from './exit-multiple';
 import { fairValueRange, grahamIsInformative } from './blend';
 import { latestCapexSplit } from './capex';
-import { fiscalYearLabeler, forwardEstimates, pickHorizon } from './fiscal';
+import { fiscalYearLabeler, forwardEstimates, pickCoveredHorizon } from './fiscal';
+import { forwardDividend } from './dividends';
 import {
   adjustedPeHistory,
   annualAdjustedEps,
@@ -122,6 +124,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     quarterlyIncome,
     segments,
     earningsHistory,
+    dividends,
     riskFreeRate,
   ] = await Promise.all([
     // The profile carries the price and share count, so it is the one hard requirement.
@@ -139,6 +142,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     optional('quarterly income', getIncomeStatements(ticker, 'quarter', 44), []),
     optional('revenue segments', getRevenueSegments(ticker), []),
     optional('earnings history', getEarningsHistory(ticker, 44), []),
+    optional('dividends', getDividends(ticker), []),
     getRiskFreeRate(),
   ]);
 
@@ -353,10 +357,16 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
    */
   const horizonYears = overrides.horizonYears ?? DEFAULT_HORIZON_YEARS;
   const hurdle = overrides.hurdle ?? DEFAULT_HURDLE;
-  const dividendYield = ratios?.dividendYieldTTM ?? 0;
+  // Forward yield from declared payments; the trailing ratio only if the
+  // dividend history is unavailable.
+  const dividend = forwardDividend(dividends, price);
+  const dividendYield = dividend.method !== 'none' ? dividend.yield : dividends.length ? 0 : (ratios?.dividendYieldTTM ?? 0);
 
   // The forecast year ending closest to the horizon, and the real time to it.
-  const horizon = pickHorizon(sortedEstimates, horizonYears);
+  const horizon = pickCoveredHorizon(sortedEstimates, horizonYears);
+  const horizonNote = horizon?.skipped
+    ? `FY${fiscalYearOf(horizon.skipped.estimate.date)} rests on ${horizon.skipped.analysts} analyst${horizon.skipped.analysts === 1 ? '' : 's'}, too thin to anchor on, so the horizon is FY${fiscalYearOf(horizon.estimate.date)}.`
+    : null;
   const horizonEstimate = horizon?.estimate ?? null;
   const yearsToHorizon = horizon?.years ?? horizonYears;
 
@@ -651,6 +661,8 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     expectedReturn: {
       horizonYears,
       yearsToHorizon,
+      horizonNote,
+      dividendMethod: dividend.method,
       hurdle,
       dividendYield,
       epsAtHorizon,

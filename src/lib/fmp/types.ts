@@ -234,6 +234,7 @@ export interface AnnualRatios {
   netProfitMargin: number;
   netIncomePerShare: number;
   dividendYield: number;
+  reportedCurrency?: string;
 }
 
 export interface IndustryPe {
@@ -278,4 +279,12 @@ export interface PriceBar {
   date: string;
   price: number;
   volume: number;
+}
+
+export interface DividendRecord {
+  symbol: string;
+  date: string;
+  dividend: number;
+  adjDividend?: number;
+  frequency?: string | null;
 }

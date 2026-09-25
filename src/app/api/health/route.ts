@@ -32,6 +32,8 @@ const CHECKS: Array<{ name: string; endpoint: string; params: Record<string, str
     params: { symbol: 'AAPL', period: 'annual' },
   },
   { name: 'price history', endpoint: 'historical-price-eod/light', params: { symbol: 'AAPL', from: '2026-01-02' } },
+  { name: 'dividends', endpoint: 'dividends', params: { symbol: 'AAPL', limit: '4' } },
+  { name: 'FX rate', endpoint: 'quote-short', params: { symbol: 'TWDUSD' } },
   { name: 'annual ratios', endpoint: 'ratios', params: { symbol: 'AAPL', period: 'annual', limit: '3' } },
   {
     name: 'industry P/E history',
