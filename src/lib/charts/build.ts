@@ -99,7 +99,9 @@ export async function buildChartData(symbol: string): Promise<ChartData> {
     new Date().toISOString().slice(0, 10),
   );
   // A few days' margin so the first period end has a close to read.
-  const from = new Date(Date.parse(earliest) - 10 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  // A year before the first period, so lines reach the left edge of a chart
+  // whose first column is centred half a period after its axis.
+  const from = new Date(Date.parse(earliest) - 400 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const daily = await optional('price history', getPriceHistory(ticker, from), []);
   const prices = daily
     .map((p) => ({ date: p.date, price: p.price }))
@@ -150,7 +152,12 @@ export async function buildChartData(symbol: string): Promise<ChartData> {
     annual: compact(annual),
     estimates: forward,
     weekly: compactWeekly(
-      weeklyValuation(weeklyPrices(prices), trailing.length ? trailing : years),
+      // Trailing quarters where they exist; fiscal years before them, so the
+      // multiples run as far back as the annual columns do.
+      weeklyValuation(weeklyPrices(prices), [
+        ...years.filter((y) => !trailing.length || y.date < trailing[0].date),
+        ...trailing,
+      ]),
     ),
     segments: {
       product: foldSegments(product.map((s) => ({ fiscalYear: String(s.fiscalYear), date: s.date, data: s.data }))),

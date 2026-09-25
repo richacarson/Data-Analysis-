@@ -94,6 +94,24 @@ function weeklyLine(
   return out;
 }
 
+/**
+ * How far before the first column a weekly overlay starts: a full period, so
+ * the line runs in from the left axis rather than beginning mid-column. The
+ * clip path trims whatever falls outside the plot.
+ */
+function overlayLead(rows: ChartRow[]): number {
+  if (rows.length < 2) return 366 * DAY;
+  return Math.max(60 * DAY, toT(rows[1].date) - toT(rows[0].date));
+}
+
+/** A line's latest value, short enough to sit in the axis gutter. */
+function axisValue(v: number, fmt: ValueFormat): string {
+  if (fmt === 'perShare') return Math.abs(v) >= 100 ? `$${v.toFixed(0)}` : `$${v.toFixed(2)}`;
+  if (fmt === 'multiple') return `${v.toFixed(1)}x`;
+  if (fmt === 'pct') return `${(v * 100).toFixed(1)}%`;
+  return formatTick(v, fmt);
+}
+
 /** Turns a catalog entry and the current rows into what gets drawn. */
 function buildSpec(def: ChartDef, rows: ChartRow[], weekly: WeeklyPoint[], segmentKeys: string[]): Spec {
   const spec: Spec = { bars: [], mode: 'single', rows, lines: [], leftFormat: def.format, rightFormat: null, average: null };
@@ -143,7 +161,7 @@ function buildSpec(def: ChartDef, rows: ChartRow[], weekly: WeeklyPoint[], segme
     // Weekly lines stop at today; period lines carry on into consensus where
     // it exists (a margin on consensus revenue and profit, say).
     const points = continuous
-      ? weeklyLine(weekly, o.key, firstT - 60 * DAY, Infinity)
+      ? weeklyLine(weekly, o.key, firstT - overlayLead(rows), Infinity)
       : rows.filter((r) => typeof r[o.key] === 'number').map((r) => ({ t: toT(r.date), v: r[o.key] as number, label: String(r.label), est: Boolean(r.estimate) }));
     if (points.length > 1) {
       spec.lines.push({ key: o.key, label: o.label, color: S2, format: o.format, axis: 'right', points, continuous });
@@ -243,7 +261,7 @@ export function MetricChart({
 
   const legendH = legend ? 20 : 0;
   const plotH = height - legendH;
-  const m = { top: 14, right: hasRight ? (compact ? 42 : 52) : 10, bottom: 20, left: compact ? 42 : 52 };
+  const m = { top: 14, right: hasRight ? (compact ? 50 : 58) : 10, bottom: 20, left: compact ? 42 : 52 };
   const innerW = Math.max(10, width - m.left - m.right);
   const innerH = Math.max(10, plotH - m.top - m.bottom);
 
@@ -472,7 +490,21 @@ export function MetricChart({
       tagSpecs.push({ key: `bar-${pt.i}`, x: xx, y: yy, text: formatValue(v, spec.leftFormat).replace('.00', ''), color: primaryBar.color, anchor: pt === first ? 'start' : 'end' });
     }
   }
+  // An overlay's latest value sits on its axis, like a live-price marker,
+  // instead of on top of the columns.
+  const axisMarks: Array<{ key: string; y: number; text: string; color: string }> = [];
   for (const l of spec.lines) {
+    if (l.axis !== 'right' || !l.points.length) continue;
+    const last = l.points[l.points.length - 1];
+    axisMarks.push({
+      key: l.key,
+      y: Math.max(m.top + 7, Math.min(yR(last.v), m.top + innerH - 7)),
+      text: `${axisValue(last.v, l.format)}${last.est ? 'E' : ''}`,
+      color: l.color,
+    });
+  }
+  for (const l of spec.lines) {
+    if (l.axis === 'right') continue;
     if (l.points.length < 2 || l.dashed) continue;
     if (spec.lines.length > 2) break;
     const y = yOf(l);
@@ -535,11 +567,25 @@ export function MetricChart({
               </g>
             ))}
             {hasRight &&
-              rightTicks.map((v) => (
-                <text key={`r${v}`} x={m.left + innerW + 6} y={yR(v) + 3} fontSize={10} fill={TICK} fontFamily="var(--font-plex-mono)">
-                  {formatTick(v, spec.rightFormat!)}
-                </text>
-              ))}
+              rightTicks
+                // A tick the value marker would sit on is dropped, not overprinted.
+                .filter((v) => !axisMarks.some((a) => Math.abs(a.y - yR(v)) < 12))
+                .map((v) => (
+                  <text key={`r${v}`} x={m.left + innerW + 6} y={yR(v) + 3} fontSize={10} fill={TICK} fontFamily="var(--font-plex-mono)">
+                    {formatTick(v, spec.rightFormat!)}
+                  </text>
+                ))}
+            {axisMarks.map((a) => {
+              const w = Math.min(m.right - 2, a.text.length * 6 + 8);
+              return (
+                <g key={`axis-${a.key}`} pointerEvents="none">
+                  <path d={`M${m.left + innerW},${a.y} l4,-7 h${w} v14 h-${w} z`} fill={a.color} />
+                  <text x={m.left + innerW + 4 + w / 2} y={a.y + 3.5} textAnchor="middle" fontSize={10} fontWeight={600} fill="#FFFFFF" fontFamily="var(--font-plex-mono)">
+                    {a.text}
+                  </text>
+                </g>
+              );
+            })}
             {xTicks.map((tk) => (
               <text key={tk.t} x={x(tk.t)} y={plotH - 5} textAnchor="middle" fontSize={10} fill={TICK} fontFamily="var(--font-plex-mono)">
                 {tk.label}
