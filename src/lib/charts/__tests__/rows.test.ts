@@ -144,3 +144,45 @@ describe('foldSegments', () => {
     expect((y2024.A as number) + (y2024.B as number) + (y2024.Other as number)).toBe(80);
   });
 });
+
+describe('consensus rows', () => {
+  const est = (date: string, revenue: number, eps: number) => ({
+    date,
+    revenueAvg: revenue,
+    ebitdaAvg: revenue * 0.4,
+    ebitAvg: revenue * 0.3,
+    netIncomeAvg: revenue * 0.2,
+    epsAvg: eps,
+    numAnalystsEps: 10,
+  });
+
+  it('labels forward quarters by carrying the fiscal quarter on, across a year end', async () => {
+    const { quarterEstimateRows } = await import('../rows');
+    const q = quarterRows(quarters, [], []); // last reported: Q1 FY2026 at 2026-03-31
+    const rows = quarterEstimateRows(
+      [est('2026-03-31', 1, 1), est('2026-06-30', 1450, 1.45), est('2026-09-30', 1500, 1.5), est('2026-12-31', 1550, 1.55), est('2027-03-31', 1600, 1.6)],
+      q[q.length - 1],
+    );
+    // The already-reported quarter is dropped; the rest run Q2 FY26 to Q1 FY27.
+    expect(rows.map((r) => r.label)).toEqual(["Q2 '26E", "Q3 '26E", "Q4 '26E", "Q1 '27E"]);
+    expect(rows.every((r) => r.estimate)).toBe(true);
+  });
+
+  it('runs trailing twelve months from reported quarters into consensus ones', async () => {
+    const { quarterEstimateRows, ttmEstimateRows } = await import('../rows');
+    const q = quarterRows(quarters, [], []);
+    const fwd = quarterEstimateRows([est('2026-06-30', 1500, 1.5)], q[q.length - 1]);
+    const t = ttmEstimateRows(q, fwd);
+    // Q3 '25 + Q4 '25 + Q1 '26 reported, Q2 '26 consensus.
+    expect(t[0].revenue).toBe(1200 + 1300 + 1400 + 1500);
+  });
+
+  it('measures consensus growth and margins against the view it continues', async () => {
+    const { deriveEstimates, estimateRow } = await import('../rows');
+    const history = [{ key: 'FY2025', label: '2025', date: '2025-12-31', fiscalYear: '2025', period: 'FY', revenue: 1000, epsAdjusted: 4 }];
+    const [e] = deriveEstimates(history, [estimateRow(est('2026-12-31', 1100, 5), 'FY2026E', '2026E', '2026', 'FY')], 1);
+    expect(e.revenueGrowth).toBeCloseTo(0.1);
+    expect(e.epsAdjustedGrowth).toBeCloseTo(0.25);
+    expect(e.operatingMargin).toBeCloseTo(0.3);
+  });
+});

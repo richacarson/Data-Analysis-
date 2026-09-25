@@ -95,6 +95,11 @@ const CHECKS = [
     fields: ['fiscalYear', 'data'],
   },
   {
+    endpoint: 'analyst-estimates',
+    params: { symbol: SYMBOL, period: 'quarter', limit: 4 },
+    fields: ['date', 'revenueAvg', 'ebitdaAvg', 'ebitAvg', 'netIncomeAvg', 'epsAvg'],
+  },
+  {
     endpoint: 'revenue-geographic-segmentation',
     params: { symbol: SYMBOL, period: 'annual' },
     fields: ['fiscalYear', 'data'],

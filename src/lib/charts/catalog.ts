@@ -70,22 +70,23 @@ export const CHARTS: ChartDef[] = [
   // ---- Income -------------------------------------------------------------
   { id: 'revenue', title: 'Revenue', category: 'Income', kind: 'bar', series: [{ key: 'revenue', label: 'Revenue' }], format: 'money', overlay: PRICE, withEstimates: true },
   { id: 'grossProfit', title: 'Gross profit', category: 'Income', kind: 'bar', series: [{ key: 'grossProfit', label: 'Gross profit' }], format: 'money', overlay: { key: 'grossMargin', label: 'Gross margin', format: 'pct' } },
-  { id: 'operatingIncome', title: 'Operating income', category: 'Income', kind: 'bar', series: [{ key: 'operatingIncome', label: 'Operating income' }], format: 'money', overlay: { key: 'operatingMargin', label: 'Operating margin', format: 'pct' } },
-  { id: 'ebitda', title: 'EBITDA', category: 'Income', kind: 'bar', series: [{ key: 'ebitda', label: 'EBITDA' }], format: 'money', overlay: { key: 'evEbitda', label: 'EV/EBITDA', format: 'multiple' } },
-  { id: 'netIncome', title: 'Net income', category: 'Income', kind: 'bar', series: [{ key: 'netIncome', label: 'Net income' }], format: 'money', overlay: { key: 'netMargin', label: 'Net margin', format: 'pct' } },
+  { id: 'operatingIncome', title: 'Operating income', category: 'Income', kind: 'bar', series: [{ key: 'operatingIncome', label: 'Operating income' }], format: 'money', overlay: { key: 'operatingMargin', label: 'Operating margin', format: 'pct' }, withEstimates: true },
+  { id: 'ebitda', title: 'EBITDA', category: 'Income', kind: 'bar', series: [{ key: 'ebitda', label: 'EBITDA' }], format: 'money', overlay: { key: 'evEbitda', label: 'EV/EBITDA', format: 'multiple' }, withEstimates: true },
+  { id: 'netIncome', title: 'Net income', category: 'Income', kind: 'bar', series: [{ key: 'netIncome', label: 'Net income' }], format: 'money', overlay: { key: 'netMargin', label: 'Net margin', format: 'pct' }, withEstimates: true },
   { id: 'eps', title: 'EPS (GAAP)', category: 'Income', kind: 'bar', series: [{ key: 'eps', label: 'Diluted EPS' }], format: 'perShare', overlay: { key: 'pe', label: 'P/E', format: 'multiple' } },
-  { id: 'epsAdjusted', title: 'EPS (adjusted)', category: 'Income', kind: 'bar', series: [{ key: 'epsAdjusted', label: 'Adjusted EPS' }], format: 'perShare', overlay: { key: 'peAdjusted', label: 'P/E adjusted', format: 'multiple' }, withEstimates: true, note: 'As reported by the company; consensus is quoted on this basis' },
+  { id: 'epsAdjusted', title: 'EPS (adjusted)', category: 'Income', kind: 'bar', series: [{ key: 'epsAdjusted', label: 'Adjusted EPS' }], format: 'perShare', overlay: { key: 'peAdjusted', label: 'P/E adjusted', format: 'multiple' }, withEstimates: true, note: 'As reported; hatched bars are consensus' },
   { id: 'opex', title: 'Operating expenses', category: 'Income', kind: 'stack', series: [{ key: 'sga', label: 'SG&A' }, { key: 'rnd', label: 'R&D' }], format: 'money' },
   { id: 'rnd', title: 'Research & development', category: 'Income', kind: 'bar', series: [{ key: 'rnd', label: 'R&D' }], format: 'money', overlay: { key: 'rndPct', label: 'R&D / revenue', format: 'pct' } },
   { id: 'interestExpense', title: 'Interest expense', category: 'Income', kind: 'bar', series: [{ key: 'interestExpense', label: 'Interest expense' }], format: 'money', overlay: { key: 'interestCoverage', label: 'Interest coverage', format: 'multiple' } },
   { id: 'incomeTax', title: 'Income tax', category: 'Income', kind: 'bar', series: [{ key: 'incomeTax', label: 'Income tax' }], format: 'money', overlay: { key: 'effectiveTaxRate', label: 'Effective tax rate', format: 'pct' } },
 
   // ---- Growth & margins ---------------------------------------------------
-  { id: 'margins', title: 'Margins', category: 'Growth & margins', kind: 'line', series: [{ key: 'grossMargin', label: 'Gross' }, { key: 'operatingMargin', label: 'Operating' }, { key: 'netMargin', label: 'Net' }], format: 'pct' },
-  { id: 'revenueGrowth', title: 'Revenue growth', category: 'Growth & margins', kind: 'bar', series: [{ key: 'revenueGrowth', label: 'Revenue growth' }], format: 'pct', note: 'Against the same period a year earlier' },
+  { id: 'margins', title: 'Margins', category: 'Growth & margins', kind: 'line', series: [{ key: 'grossMargin', label: 'Gross' }, { key: 'operatingMargin', label: 'Operating' }, { key: 'netMargin', label: 'Net' }], format: 'pct', withEstimates: true },
+  { id: 'revenueGrowth', title: 'Revenue growth', category: 'Growth & margins', kind: 'bar', series: [{ key: 'revenueGrowth', label: 'Revenue growth' }], format: 'pct', note: 'Against the same period a year earlier', withEstimates: true },
   { id: 'epsGrowth', title: 'EPS growth', category: 'Growth & margins', kind: 'bar', series: [{ key: 'epsGrowth', label: 'EPS growth' }], format: 'pct', note: 'GAAP, against the same period a year earlier' },
+  { id: 'epsAdjustedGrowth', title: 'EPS growth (adjusted)', category: 'Growth & margins', kind: 'bar', series: [{ key: 'epsAdjustedGrowth', label: 'Adjusted EPS growth' }], format: 'pct', note: 'Against the same period a year earlier', withEstimates: true },
   { id: 'fcfGrowth', title: 'Free cash flow growth', category: 'Growth & margins', kind: 'bar', series: [{ key: 'fcfGrowth', label: 'FCF growth' }], format: 'pct', note: 'Against the same period a year earlier' },
-  { id: 'ebitdaMargin', title: 'EBITDA margin', category: 'Growth & margins', kind: 'line', series: [{ key: 'ebitdaMargin', label: 'EBITDA margin' }], format: 'pct' },
+  { id: 'ebitdaMargin', title: 'EBITDA margin', category: 'Growth & margins', kind: 'line', series: [{ key: 'ebitdaMargin', label: 'EBITDA margin' }], format: 'pct', withEstimates: true },
   { id: 'fcfMargin', title: 'Free cash flow margin', category: 'Growth & margins', kind: 'line', series: [{ key: 'fcfMargin', label: 'FCF margin' }], format: 'pct' },
 
   // ---- Cash flow ----------------------------------------------------------

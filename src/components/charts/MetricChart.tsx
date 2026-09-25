@@ -59,7 +59,7 @@ interface Line {
   color: string;
   format: ValueFormat;
   axis: 'left' | 'right';
-  points: Array<{ t: number; v: number; label?: string }>;
+  points: Array<{ t: number; v: number; label?: string; est?: boolean }>;
   dashed?: boolean;
   area?: boolean;
   continuous: boolean;
@@ -125,7 +125,7 @@ function buildSpec(def: ChartDef, rows: ChartRow[], weekly: WeeklyPoint[], segme
           continuous: false,
           points: rows
             .filter((r) => typeof r[s.key] === 'number')
-            .map((r) => ({ t: toT(r.date), v: r[s.key] as number, label: String(r.label) })),
+            .map((r) => ({ t: toT(r.date), v: r[s.key] as number, label: String(r.label), est: Boolean(r.estimate) })),
         }),
       );
     return spec;
@@ -140,10 +140,11 @@ function buildSpec(def: ChartDef, rows: ChartRow[], weekly: WeeklyPoint[], segme
     const o = def.overlay;
     const continuous = CONTINUOUS.has(o.key);
     // Estimates have no price; the line runs through the reported periods to today.
-    const reported = rows.filter((r) => !r.estimate);
+    // Weekly lines stop at today; period lines carry on into consensus where
+    // it exists (a margin on consensus revenue and profit, say).
     const points = continuous
       ? weeklyLine(weekly, o.key, firstT - 60 * DAY, Infinity)
-      : reported.filter((r) => typeof r[o.key] === 'number').map((r) => ({ t: toT(r.date), v: r[o.key] as number, label: String(r.label) }));
+      : rows.filter((r) => typeof r[o.key] === 'number').map((r) => ({ t: toT(r.date), v: r[o.key] as number, label: String(r.label), est: Boolean(r.estimate) }));
     if (points.length > 1) {
       spec.lines.push({ key: o.key, label: o.label, color: S2, format: o.format, axis: 'right', points, continuous });
       spec.rightFormat = o.format;
@@ -419,7 +420,13 @@ export function MetricChart({
 
   const paths = spec.lines.map((l) => {
     const y = yOf(l);
-    const d = l.points.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join('');
+    const seg = (pts: Line['points']) => pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join('');
+    // Reported history solid; consensus continues from the last reported
+    // point, dashed, so the forecast is never mistaken for a result.
+    const firstEst = l.points.findIndex((p) => p.est);
+    const actual = firstEst < 0 ? l.points : l.points.slice(0, firstEst);
+    const forecast = firstEst < 0 ? [] : l.points.slice(Math.max(0, firstEst - 1));
+    const d = seg(actual);
     const area =
       l.area && l.points.length
         ? `${d}L${x(l.points[l.points.length - 1].t).toFixed(1)},${(m.top + innerH).toFixed(1)}L${x(l.points[0].t).toFixed(1)},${(m.top + innerH).toFixed(1)}Z`
@@ -428,7 +435,10 @@ export function MetricChart({
       <g key={l.key}>
         {area && <path d={area} fill={l.color} opacity={0.1} />}
         <path d={d} fill="none" stroke={l.color} strokeWidth={l.continuous ? 1.6 : 2} strokeLinejoin="round" strokeLinecap="round" strokeDasharray={l.dashed ? '5 3' : undefined} />
-        {!l.continuous && l.points.length <= 16 && l.points.map((p) => <circle key={p.t} cx={x(p.t)} cy={y(p.v)} r={2.5} fill={l.color} stroke={SURFACE} strokeWidth={1.5} />)}
+        {forecast.length > 1 && (
+          <path d={seg(forecast)} fill="none" stroke={l.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" strokeDasharray="2 4" opacity={0.85} />
+        )}
+        {!l.continuous && l.points.length <= 16 && l.points.map((p) => <circle key={p.t} cx={x(p.t)} cy={y(p.v)} r={2.5} fill={p.est ? SURFACE : l.color} stroke={p.est ? l.color : SURFACE} strokeWidth={1.5} />)}
       </g>
     );
   });
@@ -441,6 +451,19 @@ export function MetricChart({
     const reported = spec.rows.map((r, i) => ({ r, i })).filter(({ r }) => !r.estimate && typeof r[primaryBar.key] === 'number');
     const first = reported[0];
     const last = reported[reported.length - 1];
+    const forecasts = spec.rows.map((r, i) => ({ r, i })).filter(({ r }) => r.estimate && typeof r[primaryBar.key] === 'number');
+    const furthest = forecasts[forecasts.length - 1];
+    if (furthest) {
+      const v = furthest.r[primaryBar.key] as number;
+      tagSpecs.push({
+        key: `bar-est-${furthest.i}`,
+        x: x(barTs[furthest.i]) + barW / 2,
+        y: Math.max(m.top + 8, Math.min(yL(v), zero) - 11),
+        text: `${formatValue(v, spec.leftFormat).replace('.00', '')}E`,
+        color: '#8C6900',
+        anchor: 'end',
+      });
+    }
     for (const pt of [first, last].filter(Boolean)) {
       if (!pt || (pt === first && reported.length < 2)) continue;
       const v = pt.r[primaryBar.key] as number;
@@ -454,8 +477,13 @@ export function MetricChart({
     if (spec.lines.length > 2) break;
     const y = yOf(l);
     const a = l.points[0];
-    const b = l.points[l.points.length - 1];
+    const reportedPts = l.points.filter((p) => !p.est);
+    const b = reportedPts[reportedPts.length - 1] ?? l.points[l.points.length - 1];
+    const lastEst = l.points[l.points.length - 1]?.est ? l.points[l.points.length - 1] : null;
     tagSpecs.push({ key: `${l.key}-end`, x: Math.min(x(b.t), m.left + innerW), y: Math.max(m.top + 8, Math.min(y(b.v), m.top + innerH - 8)), text: formatValue(b.v, l.format), color: l.color, anchor: 'end' });
+    if (lastEst) {
+      tagSpecs.push({ key: `${l.key}-est`, x: Math.min(x(lastEst.t), m.left + innerW), y: Math.max(m.top + 8, Math.min(y(lastEst.v) - 14, m.top + innerH - 8)), text: `${formatValue(lastEst.v, l.format)}E`, color: l.color, anchor: 'end' });
+    }
     if (l.continuous || spec.lines.length === 1) {
       tagSpecs.push({ key: `${l.key}-start`, x: x(a.t), y: Math.max(m.top + 8, Math.min(y(a.v) - 12, m.top + innerH - 8)), text: formatValue(a.v, l.format), color: l.color, anchor: 'start' });
     }
@@ -558,7 +586,11 @@ export function MetricChart({
             style={hoverX > width / 2 ? { right: width - tooltipLeft } : { left: tooltipLeft }}
           >
             <p className="mb-1 font-semibold text-t1">
-              {hoverBar ? String(hoverBar.label) : hoverLines[0] ? formatDate(hoverLines[0].p.t) : ''}
+              {hoverBar
+                ? String(hoverBar.label)
+                : hoverLines[0]
+                  ? (hoverLines[0].p.label ?? formatDate(hoverLines[0].p.t)) + (hoverLines[0].p.est ? ' · consensus' : '')
+                  : ''}
               {hoverBar?.estimate ? (
                 <span className="ml-1.5 font-normal text-t3">
                   consensus{typeof hoverBar.analysts === 'number' ? ` · ${hoverBar.analysts} analysts` : ''}

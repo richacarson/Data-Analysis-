@@ -20,6 +20,10 @@ import {
   ttmRows,
   weeklyPrices,
   weeklyValuation,
+  estimateRow,
+  quarterEstimateRows,
+  ttmEstimateRows,
+  deriveEstimates,
   type WeeklyPoint,
   type BalanceInput,
   type CashFlowInput,
@@ -33,7 +37,7 @@ export interface ChartData {
   ttm: PeriodRow[];
   annual: PeriodRow[];
   /** Consensus years after the last reported one, annual view only. */
-  estimates: PeriodRow[];
+  estimates: { annual: PeriodRow[]; quarterly: PeriodRow[]; ttm: PeriodRow[] };
   /** Weekly closes with the valuation multiples at each, for continuous lines. */
   weekly: WeeklyPoint[];
   segments: { product: SegmentData; geographic: SegmentData };
@@ -76,7 +80,7 @@ export async function buildChartData(symbol: string): Promise<ChartData> {
 
   // Request shapes match the valuation page's exactly, so whichever tab loads
   // second is served from cache rather than spending API calls again.
-  const [incQ, incA, cfQ, cfA, bsQ, bsA, earnings, estimates, product, geographic] = await Promise.all([
+  const [incQ, incA, cfQ, cfA, bsQ, bsA, earnings, estimates, quarterEstimates, product, geographic] = await Promise.all([
     optional('quarterly income', getIncomeStatements(ticker, 'quarter', 44), []),
     optional('annual income', getIncomeStatements(ticker, 'annual', 12), []),
     optional('quarterly cash flow', getCashFlowStatements(ticker, 'quarter', 44), []),
@@ -85,6 +89,7 @@ export async function buildChartData(symbol: string): Promise<ChartData> {
     optional('annual balance sheet', getBalanceSheets(ticker, 'annual', 12), []),
     optional('earnings history', getEarningsHistory(ticker, 44), []),
     optional('analyst estimates', getEstimates(ticker, 'annual', 10), []),
+    optional('quarterly estimates', getEstimates(ticker, 'quarter', 40), []),
     optional('product segments', getRevenueSegments(ticker, 'annual'), []),
     optional('geographic segments', getGeographicSegments(ticker, 'annual'), []),
   ]);
@@ -126,26 +131,24 @@ export async function buildChartData(symbol: string): Promise<ChartData> {
   // Consensus for the years not yet reported, labelled by fiscal year.
   const labelOf = fiscalYearLabeler(fiscalYearEnds);
   const lastReported = years[years.length - 1]?.date ?? null;
-  const forward: PeriodRow[] = forwardEstimates(estimates, lastReported).map((e) => {
+  // Every consensus period published, as far out as analysts go.
+  const forwardAnnual = forwardEstimates(estimates, lastReported).map((e) => {
     const fy = labelOf(e.date);
-    return {
-      key: `FY${fy}E`,
-      label: `${fy}E`,
-      date: e.date,
-      fiscalYear: fy,
-      period: 'FY',
-      estimate: true,
-      revenue: e.revenueAvg || null,
-      epsAdjusted: e.epsAvg || null,
-      analysts: e.numAnalystsEps,
-    };
+    return estimateRow(e, `FY${fy}E`, `${fy}E`, fy, 'FY');
   });
+  const forwardQuarters = quarterEstimateRows(quarterEstimates, quarters[quarters.length - 1]);
+  const forwardTtm = ttmEstimateRows(quarters, forwardQuarters);
+  const forward = {
+    annual: compact(deriveEstimates(annual, forwardAnnual, 1)),
+    quarterly: compact(deriveEstimates(quarterly, forwardQuarters, 4)),
+    ttm: compact(deriveEstimates(ttm, forwardTtm, 4)),
+  };
 
   return {
     quarterly: compact(quarterly),
     ttm: compact(ttm),
     annual: compact(annual),
-    estimates: compact(forward),
+    estimates: forward,
     weekly: compactWeekly(
       weeklyValuation(weeklyPrices(prices), trailing.length ? trailing : years),
     ),

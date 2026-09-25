@@ -303,6 +303,7 @@ export function deriveRows(
     // Growth against the same period a year earlier.
     r.revenueGrowth = growth(revenue, p('revenue'));
     r.epsGrowth = growth(n('eps'), p('eps'));
+    r.epsAdjustedGrowth = growth(n('epsAdjusted'), p('epsAdjusted'));
     r.fcfGrowth = growth(n('freeCashFlow'), p('freeCashFlow'));
 
     // Margins and intensities within the period.
@@ -427,5 +428,94 @@ export function weeklyValuation(
       fcfYield: marketCap ? ratio(f('freeCashFlow'), marketCap) : null,
       dividendYield: marketCap && f('dividends') ? ratio(f('dividends'), marketCap) : null,
     };
+  });
+}
+
+export interface EstimateInput {
+  date: string;
+  revenueAvg: number;
+  ebitdaAvg: number;
+  ebitAvg: number;
+  netIncomeAvg: number;
+  epsAvg: number;
+  numAnalystsEps: number;
+  numAnalystsRevenue?: number;
+}
+
+/** One consensus period as a row; every value is on the adjusted basis analysts quote. */
+export function estimateRow(e: EstimateInput, key: string, label: string, fiscalYear: string, period: string): PeriodRow {
+  const pos = (v: number) => (Number.isFinite(v) && v !== 0 ? v : null);
+  return {
+    key,
+    label,
+    date: e.date,
+    fiscalYear,
+    period,
+    estimate: true,
+    revenue: pos(e.revenueAvg),
+    ebitda: pos(e.ebitdaAvg),
+    operatingIncome: pos(e.ebitAvg),
+    ebit: pos(e.ebitAvg),
+    netIncome: pos(e.netIncomeAvg),
+    epsAdjusted: pos(e.epsAvg),
+    analysts: e.numAnalystsEps || e.numAnalystsRevenue || null,
+  };
+}
+
+/**
+ * Quarterly consensus after the last reported quarter, labelled by carrying
+ * the fiscal quarter forward: FMP dates estimates by period end, and 52/53-week
+ * calendars make the calendar month an unreliable guide to the fiscal quarter.
+ */
+export function quarterEstimateRows(estimates: EstimateInput[], lastQuarter: PeriodRow | undefined): PeriodRow[] {
+  if (!lastQuarter) return [];
+  const cutoff = Date.parse(lastQuarter.date) + 20 * DAY;
+  let fy = Number(lastQuarter.fiscalYear);
+  let q = Number(String(lastQuarter.period).slice(1));
+  if (!Number.isFinite(fy) || !Number.isFinite(q)) return [];
+  return [...estimates]
+    .filter((e) => Date.parse(e.date) > cutoff)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((e) => {
+      q += 1;
+      if (q > 4) {
+        q = 1;
+        fy += 1;
+      }
+      return estimateRow(e, `${fy}-Q${q}E`, `Q${q} '${String(fy).slice(2)}E`, String(fy), `Q${q}`);
+    });
+}
+
+/** Trailing twelve months running into the consensus quarters, reported quarters first. */
+export function ttmEstimateRows(quarters: PeriodRow[], estimates: PeriodRow[]): PeriodRow[] {
+  const seq = [...quarters, ...estimates];
+  const out: PeriodRow[] = [];
+  for (let i = quarters.length; i < seq.length; i++) {
+    if (i < 3) continue;
+    const window = seq.slice(i - 3, i + 1);
+    const row: PeriodRow = { ...seq[i] };
+    for (const f of ['revenue', 'ebitda', 'operatingIncome', 'ebit', 'netIncome', 'epsAdjusted']) {
+      const vals = window.map((r) => finite(r[f]));
+      row[f] = vals.every((v) => v !== null) ? (vals as number[]).reduce((a, b) => a + b, 0) : null;
+    }
+    out.push(row);
+  }
+  return out;
+}
+
+/** Growth and margins for consensus rows, against the rows before them in the same view. */
+export function deriveEstimates(history: PeriodRow[], estimates: PeriodRow[], lagForGrowth: number): PeriodRow[] {
+  const seq = [...history, ...estimates];
+  return estimates.map((e, k) => {
+    const i = history.length + k;
+    const prior = seq[i - lagForGrowth];
+    const r: PeriodRow = { ...e };
+    const n = (row: PeriodRow | undefined, key: string) => (row ? finite(row[key]) : null);
+    r.revenueGrowth = growth(n(r, 'revenue'), n(prior, 'revenue'));
+    r.epsAdjustedGrowth = growth(n(r, 'epsAdjusted'), n(prior, 'epsAdjusted'));
+    r.operatingMargin = ratio(n(r, 'operatingIncome'), n(r, 'revenue'));
+    r.ebitdaMargin = ratio(n(r, 'ebitda'), n(r, 'revenue'));
+    r.netMargin = ratio(n(r, 'netIncome'), n(r, 'revenue'));
+    return r;
   });
 }

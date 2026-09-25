@@ -65,7 +65,8 @@ function rowsFor(def: ChartDef, data: ChartData, period: ChartPeriod, years: num
   const base = data[effective];
   const count = Number.isFinite(years) ? (effective === 'annual' ? years : years * 4) : base.length;
   const rows: ChartRow[] = base.slice(-count);
-  if (def.withEstimates && effective === 'annual') return [...rows, ...data.estimates.slice(0, 3)];
+  // Consensus runs past the range: the range picks how much history to show.
+  if (def.withEstimates) return [...rows, ...data.estimates[effective]];
   return rows;
 }
 
