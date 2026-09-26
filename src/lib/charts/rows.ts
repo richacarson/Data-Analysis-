@@ -58,6 +58,7 @@ export interface BalanceInput {
   goodwill: number;
   intangibleAssets: number;
   inventory?: number;
+  propertyPlantEquipmentNet?: number;
 }
 
 /** One period. Every value is null where the inputs cannot support it. */
@@ -194,6 +195,7 @@ function baseRow(
     currentLiabilities: bs ? finite(bs.totalCurrentLiabilities) : null,
     goodwillIntangibles: bs ? finite((bs.goodwill ?? 0) + (bs.intangibleAssets ?? 0)) : null,
     inventory: bs ? finite(bs.inventory ?? null) : null,
+    ppe: bs ? finite(bs.propertyPlantEquipmentNet ?? null) : null,
   };
 }
 
@@ -352,8 +354,12 @@ export function deriveRows(
     const equity = n('equity');
     const taxRate = b('pretaxIncome') && b('pretaxIncome')! > 0 ? ratio(b('incomeTax'), b('pretaxIncome')) : null;
     const nopat = b('ebit') !== null ? b('ebit')! * (1 - Math.min(Math.max(taxRate ?? 0.21, 0), 0.5)) : null;
+    // FMP's definition, so the chart and the valuation page's TTM figure agree:
+    // working capital plus net PP&E plus goodwill and intangibles.
     const investedCapital =
-      n('totalDebt') !== null && equity !== null ? n('totalDebt')! + equity - (n('cash') ?? 0) : null;
+      n('currentAssets') !== null && n('currentLiabilities') !== null && n('ppe') !== null
+        ? n('currentAssets')! - n('currentLiabilities')! + n('ppe')! + (n('goodwillIntangibles') ?? 0)
+        : null;
     r.roic = investedCapital !== null && investedCapital > 0 ? ratio(nopat, investedCapital) : null;
     r.roe = equity !== null && equity > 0 ? ratio(b('netIncome'), equity) : null;
     r.roa = ratio(b('netIncome'), n('totalAssets'));

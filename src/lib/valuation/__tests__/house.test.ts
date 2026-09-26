@@ -64,6 +64,31 @@ describe('houseReturn', () => {
     const r = houseReturn(base({ industryPe: [{ date: '2026-09-24', pe: 30 }, { date: '2026-03-01', pe: 26 }] }));
     const labels = r.anchors.anchors.filter((a) => a.value !== null).map((a) => a.label);
     expect(labels).toEqual(expect.arrayContaining(['Own 10-year median', 'Industry now', 'Industry median', 'Justified by ROIC']));
-    expect(r.exitPeSource).toMatch(/Median of 5 anchors/);
+    expect(r.anchors.recommendedSource).toMatch(/Median of 5 anchors/);
+  });
+
+  it('caps the exit multiple at the highest P/E the company has traded at', () => {
+    // Full Truck Alliance-like: own history 12-16x, peers and justified far higher.
+    const annual = base().annual.map((r, i) => ({ ...r, priceToEarningsRatio: [12, 14, 16, 13, 15][i] }));
+    const r = houseReturn(base({ annual, industryPe: [{ date: '2026-09-24', pe: 40 }, { date: '2026-03-01', pe: 36 }] }));
+    expect(r.anchors.recommended!).toBeGreaterThan(16);
+    expect(r.exitPe).toBe(16);
+    expect(r.exitPeSource).toBe('Capped at own historical high');
+    expect(r.exitCapNote).toMatch(/capped at 16\.0x/);
+  });
+
+  it('leaves the multiple alone when the anchors sit within the company’s range', () => {
+    const annual = base().annual.map((r, i) => ({ ...r, priceToEarningsRatio: [18, 30, 22, 25, 20][i] }));
+    const r = houseReturn(base({ annual }));
+    expect(r.exitCapNote).toBeNull();
+    expect(r.exitPe).toBe(r.anchors.recommended);
+  });
+
+  it('does not cap a manual override or a short history', () => {
+    const annual = base().annual.map((r, i) => ({ ...r, priceToEarningsRatio: [12, 14, 16, 13, 15][i] }));
+    const peers = [{ date: '2026-09-24', pe: 40 }];
+    expect(houseReturn(base({ annual, industryPe: peers, exitPeOverride: 30 })).exitPe).toBe(30);
+    const short = houseReturn(base({ annual: annual.slice(0, 2), industryPe: peers }));
+    expect(short.exitCapNote).toBeNull();
   });
 });

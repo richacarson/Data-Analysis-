@@ -186,3 +186,27 @@ describe('consensus rows', () => {
     expect(e.operatingMargin).toBeCloseTo(0.3);
   });
 });
+
+describe('ROIC', () => {
+  it('uses FMP’s invested capital: working capital, net PP&E, goodwill and intangibles', () => {
+    // Stanley Black & Decker's Q2 2026 balance sheet; FMP reports 13,911.5M.
+    const bs = {
+      date: '2026-03-31',
+      cashAndShortTermInvestments: 592.4,
+      totalDebt: 4757.9,
+      netDebt: 4165.5,
+      totalAssets: 20093.5,
+      totalLiabilities: 11134.7,
+      totalStockholdersEquity: 8958.8,
+      totalCurrentAssets: 6343.7,
+      totalCurrentLiabilities: 4429.1,
+      goodwill: 7265.6,
+      intangibleAssets: 3023.8,
+      propertyPlantEquipmentNet: 1707.5,
+    };
+    const t = ttmRows(quarterRows(quarters, [], [bs]));
+    const row = deriveRows(t, prices, (r) => r, 4).at(-1)!;
+    // TTM EBIT 2,000 (40% of 5,000 revenue) × (1 − 20% tax) over 13,911.5.
+    expect(row.roic as number).toBeCloseTo((2000 * 0.8) / 13911.5, 4);
+  });
+});

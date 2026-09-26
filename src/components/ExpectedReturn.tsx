@@ -51,6 +51,12 @@ export function ExpectedReturnPanel({
           <p className="mt-2 text-[12px] leading-relaxed text-t3">{expected.horizonNote}</p>
         </div>
       )}
+      {expected.exitCapNote && (
+        <div className="border-b border-line bg-warn/[0.08] px-4 py-3">
+          <Badge tone="flat">Exit multiple capped</Badge>
+          <p className="mt-2 text-[12px] leading-relaxed text-t3">{expected.exitCapNote}</p>
+        </div>
+      )}
       {expected.analystCount > 0 && expected.analystCount < 3 && (
         <div className="border-b border-line bg-dn/[0.08] px-4 py-3">
           <Badge tone="neg">

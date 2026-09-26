@@ -131,7 +131,10 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
                         <span className="text-dn"> ({r.analystCount})</span>
                       )}
                     </span>
-                    <span>× {multiple(r.exitPe)}</span>
+                    <span>
+                      × {multiple(r.exitPe)}
+                      {r.exitCapNote && <span className="text-warn"> (capped)</span>}
+                    </span>
                     <span>needs {multiple(r.requiredExitPe)}</span>
                     {r.dividendYield > 0 && <span>{pct(r.dividendYield)} yield</span>}
                   </div>
@@ -222,7 +225,14 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
                       '—'
                     )}
                   </td>
-                  <td className="tabular px-3 py-2 text-right text-t2">{multiple(r.exitPe)}</td>
+                  <td className="tabular px-3 py-2 text-right text-t2">
+                    {multiple(r.exitPe)}
+                    {r.exitCapNote && (
+                      <span className="ml-1 text-[10px] text-warn" title={r.exitCapNote}>
+                        cap
+                      </span>
+                    )}
+                  </td>
                   <td className="tabular px-3 py-2 text-right text-t2">
                     {multiple(r.requiredExitPe)}
                   </td>

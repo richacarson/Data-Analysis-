@@ -21,6 +21,9 @@ import { costOfEquity } from './wacc';
  */
 export const MAX_HISTORICAL_PE = 100;
 
+/** Years of own history needed before its high caps the exit multiple. */
+export const MIN_HISTORY_FOR_CAP = 3;
+
 export interface HouseEstimate {
   date: string;
   epsAvg: number;
@@ -61,6 +64,8 @@ export interface HouseResult {
   anchors: ExitMultipleAnchors;
   exitPe: number | null;
   exitPeSource: string | null;
+  /** Set when the anchors exceeded the company's own highest P/E and were capped to it. */
+  exitCapNote: string | null;
   peBasis: 'adjusted' | 'gaap';
   basis: BasisComparison;
   sustainableGrowth: number;
@@ -137,8 +142,24 @@ export function houseReturn(input: HouseInputs): HouseResult {
         : null,
   });
 
-  const exitPe = input.exitPeOverride ?? anchors.recommended ?? null;
-  const exitPeSource = input.exitPeOverride !== undefined ? 'Manual override' : anchors.recommendedSource;
+  // The anchors can blend toward a sector or justified multiple the stock has
+  // never traded at: Full Truck Alliance and Atour screened at +76% and +65%
+  // on re-ratings toward US peers. Without an override, the exit multiple
+  // stops at the highest P/E the company has actually carried.
+  const ownMax = ownHistory.length >= MIN_HISTORY_FOR_CAP ? Math.max(...ownHistory) : null;
+  const capped =
+    input.exitPeOverride === undefined && ownMax !== null && anchors.recommended !== null && anchors.recommended > ownMax;
+  const exitPe = input.exitPeOverride ?? (capped ? ownMax : anchors.recommended) ?? null;
+  const exitPeSource =
+    input.exitPeOverride !== undefined
+      ? 'Manual override'
+      : capped
+        ? 'Capped at own historical high'
+        : anchors.recommendedSource;
+  const exitCapNote =
+    capped && ownMax !== null && anchors.recommended !== null
+      ? `Exit multiple capped at ${ownMax.toFixed(1)}x, the highest P/E it has traded at in the ${ownHistory.length} years used. The anchors' ${anchors.recommended.toFixed(1)}x would assume a re-rating it has never had.`
+      : null;
   const years = horizon?.years ?? input.horizonYears;
 
   const expected =
@@ -172,6 +193,7 @@ export function houseReturn(input: HouseInputs): HouseResult {
     anchors,
     exitPe,
     exitPeSource,
+    exitCapNote,
     peBasis,
     basis,
     sustainableGrowth,

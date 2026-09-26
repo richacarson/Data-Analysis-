@@ -120,8 +120,8 @@ export const CHARTS: ChartDef[] = [
   { id: 'debtToEquity', title: 'Debt / equity', category: 'Balance sheet', kind: 'line', series: [{ key: 'debtToEquity', label: 'Debt / equity' }], format: 'ratio' },
 
   // ---- Returns ------------------------------------------------------------
-  { id: 'roic', title: 'Return on invested capital', category: 'Returns', kind: 'line', series: [{ key: 'roic', label: 'ROIC' }], format: 'pct', note: 'Trailing-year after-tax EBIT over debt plus equity less cash' },
-  { id: 'roe', title: 'Return on equity', category: 'Returns', kind: 'line', series: [{ key: 'roe', label: 'ROE' }], format: 'pct' },
+  { id: 'roic', title: 'Return on invested capital', category: 'Returns', kind: 'line', series: [{ key: 'roic', label: 'ROIC' }], format: 'pct', note: 'Trailing-year after-tax EBIT over working capital, net PP&E, goodwill and intangibles (FMP’s definition). Annual view is the fiscal year; the valuation page shows trailing twelve months' },
+  { id: 'roe', title: 'Return on equity', category: 'Returns', kind: 'line', series: [{ key: 'roe', label: 'ROE' }], format: 'pct', note: 'Trailing-year net income over period-end equity. Annual view is the fiscal year; the valuation page shows trailing twelve months' },
   { id: 'roa', title: 'Return on assets', category: 'Returns', kind: 'line', series: [{ key: 'roa', label: 'ROA' }], format: 'pct' },
 
   // ---- Mix ----------------------------------------------------------------

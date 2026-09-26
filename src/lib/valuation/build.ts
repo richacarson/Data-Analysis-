@@ -633,6 +633,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
       analystCount: house.horizon?.estimate.numAnalystsEps ?? 0,
       exitPe: house.exitPe,
       exitPeSource: house.exitPeSource,
+      exitCapNote: house.exitCapNote,
       anchors: house.anchors.anchors,
       peBasis: house.peBasis,
       basis: house.basis,
