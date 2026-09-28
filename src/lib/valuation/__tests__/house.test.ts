@@ -73,7 +73,7 @@ describe('houseReturn', () => {
     const r = houseReturn(base({ annual, industryPe: [{ date: '2026-09-24', pe: 40 }, { date: '2026-03-01', pe: 36 }] }));
     expect(r.anchors.recommended!).toBeGreaterThan(16);
     expect(r.exitPe).toBe(16);
-    expect(r.exitPeSource).toBe('Capped at own historical high');
+    expect(r.exitPeSource).toMatch(/highest historical P\/E \(capped\)/);
     expect(r.exitCapNote).toMatch(/capped at 16\.0x/);
   });
 
@@ -90,5 +90,15 @@ describe('houseReturn', () => {
     expect(houseReturn(base({ annual, industryPe: peers, exitPeOverride: 30 })).exitPe).toBe(30);
     const short = houseReturn(base({ annual: annual.slice(0, 2), industryPe: peers }));
     expect(short.exitCapNote).toBeNull();
+  });
+
+  it('excludes an industry P/E distorted by near-zero earners, and a zero one', () => {
+    const r = houseReturn(base({ industryPe: [{ date: '2026-09-24', pe: 96.78 }, { date: '2026-03-01', pe: 0 }] }));
+    const industry = r.anchors.anchors.filter((a) => a.label.startsWith('Industry'));
+    expect(industry.length).toBeGreaterThan(0);
+    for (const a of industry) {
+      if (a.value !== null) expect(a.excluded).toBe(true);
+    }
+    expect(r.anchors.recommendedSource).not.toMatch(/5 anchors/);
   });
 });

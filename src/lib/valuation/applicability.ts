@@ -84,3 +84,40 @@ export function perShareModelsApply(
 export function isRealEstateTrust(sector: string, industry: string): boolean {
   return /real estate|reit/i.test(`${sector} ${industry}`);
 }
+
+/** An annual report older than this means nothing newer was filed. */
+const STALE_FILING_DAYS = 500;
+
+/**
+ * Why this listing cannot be valued as a going common stock, or null.
+ *
+ * Marathon Oil (acquired by ConocoPhillips) still returns a profile, a frozen
+ * price and the estimates analysts left behind, so it valued like a live
+ * company. Entergy Arkansas's 4.875% bond trades under EAI with the issuer's
+ * statements attached, and valued like its equity. Each is caught here: FMP's
+ * own inactive flag, a security name that describes a bond or preferred, or
+ * annual reports that stopped.
+ */
+export function listingIssue(input: {
+  companyName?: string | null;
+  isActivelyTrading?: boolean | null;
+  latestAnnualReport?: string | null;
+  today?: Date;
+}): string | null {
+  if (input.isActivelyTrading === false) {
+    return 'No longer trading: FMP marks this listing inactive, which usually means it was acquired, merged or delisted. Its price and estimates are frozen at the last trade.';
+  }
+  const name = input.companyName ?? '';
+  // Securities names abbreviate: "1M BD 4.875%66", "PFD SER A", "5.25% NTS".
+  if (/\d%|\b(BD|NTS?|DEB|PFD)\b/.test(name)) {
+    return `Not common stock: "${name}" reads as a bond or preferred security. The statements and estimates belong to the issuer, so an equity valuation does not apply.`;
+  }
+  if (input.latestAnnualReport) {
+    const today = input.today ?? new Date();
+    const age = (today.getTime() - Date.parse(`${input.latestAnnualReport.slice(0, 10)}T00:00:00Z`)) / 86_400_000;
+    if (age > STALE_FILING_DAYS) {
+      return `Stale: the latest annual report covers the year to ${input.latestAnnualReport.slice(0, 10)} and nothing newer has been filed, which usually means the company was acquired or went private. Estimates may be left over.`;
+    }
+  }
+  return null;
+}

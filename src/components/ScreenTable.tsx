@@ -127,6 +127,7 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
                   <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] tabular-nums text-t4">
                     <span>
                       {num(r.epsAtHorizon)} EPS FY{r.horizonFiscalYear}
+                      {r.yearsToHorizon ? ` · ${num(r.yearsToHorizon, 1)}y` : ''}
                       {r.analystCount > 0 && r.analystCount < 3 && (
                         <span className="text-dn"> ({r.analystCount})</span>
                       )}
@@ -197,7 +198,10 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
                     {r.epsAtHorizon !== null ? (
                       <>
                         {num(r.epsAtHorizon)}
-                        <span className="ml-1 text-[10px] text-t4">FY{r.horizonFiscalYear}</span>
+                        <span className="ml-1 text-[10px] text-t4">
+                          FY{r.horizonFiscalYear}
+                          {r.yearsToHorizon ? ` · ${num(r.yearsToHorizon, 1)}y` : ''}
+                        </span>
                         {r.horizonNote && (
                           <span className="ml-1 text-[10px] text-warn" title={r.horizonNote}>
                             ↓

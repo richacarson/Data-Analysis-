@@ -25,7 +25,9 @@ export function ExpectedReturnPanel({
     return (
       <Panel eyebrow="Expected return" title={`${expected.horizonYears}-year total return`}>
         <p className="px-4 py-6 text-[12px] leading-relaxed text-t3">
-          {expected.review
+          {expected.listingIssue
+            ? expected.listingIssue
+            : expected.review
             ? `${expected.review}. Output this far outside the plausible range points to a data problem — a currency mix-up or a broken multiple history — so it is not shown as a result.`
             : 'Not available. This needs consensus earnings at the horizon and an exit multiple that can be compared to the quoted price.'}
         </p>
@@ -34,12 +36,19 @@ export function ExpectedReturnPanel({
   }
 
   const clears = result.totalCagr >= expected.hurdle;
+  // Fiscal years ending outside December say when: Home Depot's FY2028 ends in January 2029.
+  const yearEnd = expected.horizonDate ? new Date(`${expected.horizonDate.slice(0, 10)}T00:00:00Z`) : null;
+  const yearEndNote =
+    yearEnd && yearEnd.getUTCMonth() !== 11
+      ? ` (year to ${yearEnd.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })})`
+      : '';
+  const years = num(expected.yearsToHorizon, 1);
 
   return (
     <Panel
       eyebrow="Expected return"
-      title={`${expected.horizonYears}-year total return`}
-      subtitle={`FY${expected.horizonFiscalYear} consensus · ${expected.analystCount} ${
+      title={`Total return to FY${expected.horizonFiscalYear}, ${years} years out`}
+      subtitle={`FY${expected.horizonFiscalYear}${yearEndNote} consensus · ${expected.analystCount} ${
         expected.analystCount === 1 ? 'analyst' : 'analysts'
       } · year ends in ${num(expected.yearsToHorizon, 1)} years${
         expected.convertedFrom ? ` · converted from ${expected.convertedFrom}` : ''
@@ -109,7 +118,7 @@ export function ExpectedReturnPanel({
       )}
       <div className="stat-grid border-b border-line md:grid-cols-4">
         <Stat
-          label="Expected CAGR"
+          label={`Expected CAGR · ${years} yrs`}
           value={pct(result.totalCagr)}
           tone={result.totalCagr - expected.hurdle}
           sub={`${pct(result.priceCagr)} price + ${pct(expected.dividendYield)} ${

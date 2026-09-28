@@ -79,6 +79,8 @@ export default async function StockPage({
 
   const { profile, models, quality, growth, costOfCapital, growthAdjusted, consensus } = report;
   const { reverseUsable, shown } = report.applicability;
+  // Hilton's buybacks put book equity below zero; its ROE read -28% one way and +139% the other.
+  const negativeEquity = (report.history.balance[0]?.totalStockholdersEquity ?? 1) <= 0;
   // One place says why a model is missing; the panels only point to it.
   const excludedNote = (label: string) =>
     report.modelNotes.find((n) => n.label === label)?.reason ?? 'Not applicable to this company.';
@@ -115,7 +117,7 @@ export default async function StockPage({
         currency={currency}
         expectedCagr={report.expectedReturn.result?.totalCagr ?? null}
         hurdle={report.expectedReturn.hurdle}
-        horizonYears={report.expectedReturn.horizonYears}
+        horizonYears={Number(report.expectedReturn.yearsToHorizon.toFixed(1))}
         valueLow={report.valueRange.low}
         valueHigh={report.valueRange.high}
         upside={report.upside}
@@ -133,6 +135,12 @@ export default async function StockPage({
       )}
 
       <StockTabs symbol={report.symbol} active="valuation" sleeve={query.sleeve} />
+
+      {report.listingIssue && (
+        <div className="border border-dn/40 bg-dn/10 px-4 py-3 text-[13px] leading-relaxed text-t1">
+          {report.listingIssue}
+        </div>
+      )}
 
       {/* Silently averaging whatever survived would misrepresent the result. */}
       {report.modelNotes.length > 0 && (
@@ -495,7 +503,7 @@ export default async function StockPage({
         {/* ---- Quality ---- */}
         <Panel eyebrow="Business quality"
           title="Quality & returns">
-          <Row label="Return on invested capital" value={pct(quality.roic)} tone={quality.roic} />
+          <Row label="Return on invested capital (TTM)" value={pct(quality.roic)} tone={quality.roic} />
           <Row label="Cost of capital" value={pct(quality.wacc)} />
           <Row
             label="Economic spread"
@@ -503,7 +511,15 @@ export default async function StockPage({
             tone={quality.economicSpread}
             hint="ROIC minus WACC — positive means the business creates value by growing"
           />
-          <Row label="Return on equity" value={pct(report.metrics?.returnOnEquityTTM)} />
+          <Row
+            label="Return on equity (TTM)"
+            value={negativeEquity ? 'n/m' : pct(report.metrics?.returnOnEquityTTM)}
+            hint={
+              negativeEquity
+                ? 'Not meaningful: book equity is negative (buybacks or losses), so the ratio flips sign without saying anything about returns'
+                : undefined
+            }
+          />
           <Row label="Gross margin" value={pct(report.ratios?.grossProfitMarginTTM)} />
           <Row label="Operating margin" value={pct(report.ratios?.operatingProfitMarginTTM)} />
           <Row label="Net margin" value={pct(report.ratios?.netProfitMarginTTM)} />
@@ -537,7 +553,20 @@ export default async function StockPage({
           />
           <Row label="Earnings yield" value={pct(quality.yields.earningsYield)} />
           <Row label="Free cash flow yield" value={pct(quality.yields.freeCashFlowYield)} />
-          <Row label="Dividend yield" value={pct(quality.yields.dividendYield)} />
+          <Row
+            label="Dividend yield — trailing"
+            value={pct(quality.yields.dividendYield)}
+            hint="Dividends paid in the last fiscal year over today's market cap; includes any special dividend"
+          />
+          <Row
+            label={`Dividend yield — ${report.expectedReturn.dividendMethod === 'trailing' ? 'trailing 12 months' : 'forward'}`}
+            value={pct(report.expectedReturn.dividendYield)}
+            hint={
+              report.expectedReturn.dividendMethod === 'trailing'
+                ? 'Payments over the past year, for semi-annual and annual payers; the basis used in the expected return'
+                : 'Latest declared payment at its annual rate; the basis used in the expected return'
+            }
+          />
           <Row label="Buyback yield" value={pct(quality.yields.buybackYield)} />
           <Row
             label="Total shareholder yield"

@@ -35,7 +35,11 @@ export default async function ScreenPage({
   // Implausible outputs (a currency mix-up, a broken feed) are kept out of
   // every count and the median rather than topping the ranking.
   const held = rows.filter((r) => r.review);
-  const clearing = scored.filter((r) => r.clearsHurdle);
+  // A pass that rests on one or two analysts is counted separately: FRHC
+  // cleared on a single estimate, which is not the same claim as twenty.
+  const thin = (r: (typeof rows)[number]) => r.analystCount > 0 && r.analystCount < 3;
+  const clearing = scored.filter((r) => r.clearsHurdle && !thin(r));
+  const clearingThin = scored.filter((r) => r.clearsHurdle && thin(r));
   const median =
     scored.length > 0
       ? [...scored].sort((a, b) => a.expectedCagr! - b.expectedCagr!)[
@@ -81,7 +85,13 @@ export default async function ScreenPage({
           label={`Clear ${(hurdle * 100).toFixed(0)}%`}
           value={String(clearing.length)}
           tone={clearing.length - scored.length / 2}
-          sub={scored.length ? `${((clearing.length / scored.length) * 100).toFixed(0)}% of scored` : undefined}
+          sub={
+            scored.length
+              ? `${((clearing.length / scored.length) * 100).toFixed(0)}% of scored${
+                  clearingThin.length ? ` · ${clearingThin.length} more on fewer than 3 analysts` : ''
+                }`
+              : undefined
+          }
         />
         <Stat
           label="Median expected CAGR"

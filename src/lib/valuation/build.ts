@@ -62,6 +62,7 @@ import {
   cashFlowModelsApply,
   isFinancialSector,
   isRealEstateTrust,
+  listingIssue,
   perShareModelsApply,
 } from './applicability';
 import { clamp, impliedCostOfDebt, wacc } from './wacc';
@@ -262,6 +263,11 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
    * on that produces a confident number with no relationship to the company.
    */
   const isFinancial = isFinancialSector(profile.sector, profile.industry);
+  const listing = listingIssue({
+    companyName: profile.companyName,
+    isActivelyTrading: profile.isActivelyTrading,
+    latestAnnualReport: latestIncome?.date ?? null,
+  });
 
   const baseFcf = latestFcf?.freeCashFlow ?? 0;
   /*
@@ -515,6 +521,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     fxRate: fxRate ?? 1,
     foreign: reportingCurrency !== quoteCurrency,
     exitPeOverride: overrides.exitPe,
+    listingIssue: listing,
   });
   const houseUsable = fxRate !== null;
   const expected = houseUsable ? house.expected : null;
@@ -577,8 +584,9 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
   ] as const;
 
   const shown = { fcfDcf: false, earningsDcf: false, earningsPower: false, graham: false };
+  if (listing) modelNotes.push({ label: 'All fair-value models', reason: listing });
   for (const c of allCandidates) {
-    if (!c.applies) continue;
+    if (!c.applies || listing) continue;
     if (!(Number.isFinite(c.value) && c.value > 0)) {
       modelNotes.push({
         label: c.label,
@@ -672,6 +680,9 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
       horizonYears,
       yearsToHorizon,
       horizonNote: house.horizonNote,
+      /** Period end of the horizon year, so a non-December year can say when it ends. */
+      horizonDate: house.horizon?.estimate.date ?? null,
+      listingIssue: listing,
       dividendMethod: dividend.method,
       hurdle,
       dividendYield,
@@ -691,7 +702,8 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
       sustainableGrowth: house.sustainableGrowth,
       review: house.review,
       result: house.review ? null : expected,
-      requiredExitMultiple: houseUsable ? house.requiredExitMultiple : null,
+      // Held for review means nothing downstream of it is shown, the hurdle multiple included.
+      requiredExitMultiple: houseUsable && !house.review ? house.requiredExitMultiple : null,
       requiredDiscount: requiredDiscount(hurdle, dividendYield, yearsToHorizon),
       scenarios: houseUsable && !house.review ? house.scenarios : null,
       clearsHurdle: expected && !house.review ? expected.totalCagr >= hurdle : null,
@@ -703,6 +715,8 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     upside: price > 0 && valueRange.midpoint ? valueRange.midpoint / price - 1 : 0,
     modelSpread: candidates,
     modelNotes,
+    /** Inactive, stale or not common stock: nothing on the page should be read as a live valuation. */
+    listingIssue: listing,
     applicability: {
       /** Which models passed every check; the page renders nothing else. */
       shown,

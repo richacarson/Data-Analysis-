@@ -88,10 +88,19 @@ function ratio(a: Num, b: Num): Num {
 }
 
 /** Multiples only mean something on positive earnings; a negative P/E is noise. */
+/**
+ * Beyond this a multiple says the denominator is near zero, not what the market
+ * pays: Insulet's P/E ran into the thousands and averaged 2,776x across its
+ * history, and Credo's adjusted P/E printed 149512500000000032x.
+ */
+const MAX_MULTIPLE = 500;
+
 function multiple(price: Num, perShare: Num): Num {
   if (price === null || perShare === null || !(perShare > 0)) return null;
-  return price / perShare;
+  return capped(price / perShare);
 }
+
+const capped = (m: Num): Num => (m === null || !(m > 0) || m > MAX_MULTIPLE ? null : m);
 
 function growth(now: Num, before: Num): Num {
   if (now === null || before === null || before === 0) return null;
@@ -346,7 +355,7 @@ export function deriveRows(
     r.peAdjusted = multiple(price, b('epsAdjusted'));
     r.ps = multiple(price, ratio(b('revenue'), ttmShares));
     r.pfcf = multiple(price, ratio(b('freeCashFlow'), ttmShares));
-    r.evEbitda = ev !== null && b('ebitda') !== null && b('ebitda')! > 0 ? ev / b('ebitda')! : null;
+    r.evEbitda = capped(ev !== null && b('ebitda') !== null && b('ebitda')! > 0 ? ev / b('ebitda')! : null);
     r.fcfYield = marketCap ? ratio(b('freeCashFlow'), marketCap) : null;
     r.dividendYield = marketCap && b('dividends') ? ratio(b('dividends'), marketCap) : null;
     r.payoutRatio = b('netIncome') !== null && b('netIncome')! > 0 && b('dividends') ? ratio(b('dividends'), b('netIncome')) : null;
@@ -428,9 +437,9 @@ export function weeklyValuation(
       marketCap,
       pe: multiple(p.price, f('eps')),
       peAdjusted: multiple(p.price, f('epsAdjusted')),
-      ps: marketCap !== null && positive(f('revenue')) ? marketCap / f('revenue')! : null,
-      pfcf: marketCap !== null && positive(f('freeCashFlow')) ? marketCap / f('freeCashFlow')! : null,
-      evEbitda: marketCap !== null && ebitda && netDebt !== null ? (marketCap + netDebt) / ebitda : null,
+      ps: capped(marketCap !== null && positive(f('revenue')) ? marketCap / f('revenue')! : null),
+      pfcf: capped(marketCap !== null && positive(f('freeCashFlow')) ? marketCap / f('freeCashFlow')! : null),
+      evEbitda: capped(marketCap !== null && ebitda && netDebt !== null ? (marketCap + netDebt) / ebitda : null),
       fcfYield: marketCap ? ratio(f('freeCashFlow'), marketCap) : null,
       dividendYield: marketCap && f('dividends') ? ratio(f('dividends'), marketCap) : null,
     };

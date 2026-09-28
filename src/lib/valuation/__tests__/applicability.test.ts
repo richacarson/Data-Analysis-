@@ -3,6 +3,7 @@ import {
   cashFlowModelsApply,
   isRealEstateTrust,
   perShareModelsApply,
+  listingIssue,
 } from '../applicability';
 import { usablePeg } from '../multiples';
 import { coverage, multiple, nonNegativeRatio } from '../../format';
@@ -146,5 +147,26 @@ describe('meaningful multiples', () => {
     expect(coverage(0, false)).toBe('No interest expense');
     expect(coverage(0, true)).toBe('0.00');
     expect(coverage(7.81, true)).toBe('7.81');
+  });
+});
+
+describe('listingIssue', () => {
+  const today = new Date('2026-09-28T00:00:00Z');
+
+  it('flags a listing FMP marks inactive (Marathon Oil after its acquisition)', () => {
+    expect(listingIssue({ companyName: 'Marathon Oil Corporation', isActivelyTrading: false, today })).toMatch(/No longer trading/);
+  });
+
+  it('flags a bond or preferred trading under a ticker (EAI)', () => {
+    expect(
+      listingIssue({ companyName: 'Entergy Arkansas, Inc. 1M BD 4.875%66', isActivelyTrading: true, latestAnnualReport: '2025-12-31', today }),
+    ).toMatch(/Not common stock/);
+    expect(listingIssue({ companyName: 'Wells Fargo & Co PFD SER L', isActivelyTrading: true, today })).toMatch(/Not common stock/);
+  });
+
+  it('flags filings that stopped, and leaves live companies alone', () => {
+    expect(listingIssue({ companyName: 'Sovos Brands, Inc.', isActivelyTrading: true, latestAnnualReport: '2023-12-30', today })).toMatch(/Stale/);
+    expect(listingIssue({ companyName: 'Preferred Bank', isActivelyTrading: true, latestAnnualReport: '2025-12-31', today })).toBeNull();
+    expect(listingIssue({ companyName: 'Home Depot, Inc.', isActivelyTrading: true, latestAnnualReport: '2026-02-01', today })).toBeNull();
   });
 });

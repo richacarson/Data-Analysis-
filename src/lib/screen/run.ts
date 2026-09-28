@@ -14,6 +14,7 @@ import {
 import { forwardDividend } from '../valuation/dividends';
 import { forwardEstimates } from '../valuation/fiscal';
 import { houseReturn } from '../valuation/house';
+import { listingIssue } from '../valuation/applicability';
 import { DEFAULT_ERP, DEFAULT_HORIZON_YEARS, DEFAULT_HURDLE } from '../valuation/build';
 
 export interface ScreenRow {
@@ -21,6 +22,8 @@ export interface ScreenRow {
   price: number | null;
   epsAtHorizon: number | null;
   horizonFiscalYear: string | null;
+  /** Years from today to the horizon year's end: what the CAGR annualizes over. */
+  yearsToHorizon?: number | null;
   analystCount: number;
   exitPe: number | null;
   exitPeSource: string | null;
@@ -160,6 +163,11 @@ export async function runScreen(
         hurdle,
         fxRate: rate,
         foreign: reported !== quote,
+        listingIssue: listingIssue({
+          companyName: profile?.companyName,
+          isActivelyTrading: profile?.isActivelyTrading,
+          latestAnnualReport: lastReported,
+        }),
       });
 
       const common: ScreenRow = {
@@ -168,6 +176,7 @@ export async function runScreen(
         dividendYield,
         epsAtHorizon: house.epsAtHorizon,
         horizonFiscalYear: house.horizon?.fiscalYear ?? null,
+        yearsToHorizon: house.horizon?.years ?? null,
         analystCount: house.horizon?.estimate.numAnalystsEps ?? 0,
         exitPe: house.exitPe,
         exitPeSource: house.exitPeSource,

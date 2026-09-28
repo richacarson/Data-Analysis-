@@ -141,7 +141,7 @@ function ChartCard({
       <div className="flex items-start justify-between gap-3 px-3.5 pb-1 pt-3">
         <div className="min-w-0">
           <h3 className="truncate text-[12px] font-semibold text-t1">{def.title}</h3>
-          <p className="truncate text-[10px] text-t4">
+          <p className="truncate text-[10px] text-t4" title={def.note}>
             {[def.annualOnly && period !== 'annual' ? 'Annual figures' : null, def.note].filter(Boolean).join(' · ') || '\u00a0'}
           </p>
         </div>

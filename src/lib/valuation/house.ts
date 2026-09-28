@@ -53,6 +53,8 @@ export interface HouseInputs {
   /** Reports in another currency: the earnings feed's adjusted history is not dependable. */
   foreign: boolean;
   exitPeOverride?: number;
+  /** Set when the listing is inactive, stale or not common stock (see listingIssue). */
+  listingIssue?: string | null;
   today?: Date;
 }
 
@@ -154,7 +156,7 @@ export function houseReturn(input: HouseInputs): HouseResult {
     input.exitPeOverride !== undefined
       ? 'Manual override'
       : capped
-        ? 'Capped at own historical high'
+        ? "the company's own highest historical P/E (capped)"
         : anchors.recommendedSource;
   const exitCapNote =
     capped && ownMax !== null && anchors.recommended !== null
@@ -184,7 +186,8 @@ export function houseReturn(input: HouseInputs): HouseResult {
         )
       : null;
 
-  const review = implausibleReturn({ exitPe, totalCagr: expected?.totalCagr ?? null, requiredExitPe: required });
+  const review =
+    input.listingIssue ?? implausibleReturn({ exitPe, totalCagr: expected?.totalCagr ?? null, requiredExitPe: required });
 
   return {
     horizon,

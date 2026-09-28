@@ -28,6 +28,9 @@ export interface ExitMultipleAnchors {
   disagreementNote: string | null;
 }
 
+/** Above this, an industry P/E is an artifact of its constituents' earnings. */
+export const MAX_INDUSTRY_PE = 80;
+
 /** Median of a list, ignoring values that cannot be a multiple. */
 export function median(values: Array<number | null | undefined>): number | null {
   const usable = values
@@ -112,6 +115,20 @@ export function exitMultipleAnchors(input: AnchorInputs): ExitMultipleAnchors {
         'What the economics support: (1 - g/ROIC) / (r - g). Independent of what anyone is paying today.',
     },
   ];
+
+  /*
+   * FMP's industry P/E averages its constituents, so a few near-zero earners
+   * can put a whole sector at 97x (aerospace and defense, for BWX Technologies
+   * and Lockheed) or a sector with losses at 0x (Nutrien). Neither is a rating
+   * anything trades on.
+   */
+  for (const a of anchors) {
+    if (!a.label.startsWith('Industry') || a.value === null) continue;
+    if (!(a.value > 0) || a.value > MAX_INDUSTRY_PE) {
+      a.excluded = true;
+      a.detail = `Excluded: an industry P/E of ${a.value.toFixed(1)}x reflects constituents with near-zero or negative earnings, not a multiple the sector trades on.`;
+    }
+  }
 
   if (input.industryNotComparable) {
     for (const a of anchors) {
