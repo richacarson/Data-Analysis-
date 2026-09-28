@@ -87,7 +87,8 @@ revoke all on function public.eq_record_estimate_snapshots(text, jsonb) from pub
 grant execute on function public.eq_record_estimate_snapshots(text, jsonb) to anon, authenticated;
 
 -- Symbols to keep recording beyond the screen's universe: anything with a
--- snapshot in the past 90 days, i.e. any stock someone has opened.
+-- snapshot in the past 90 days (any stock someone has opened) and anything on
+-- a watchlist.
 create or replace function public.eq_tracked_symbols(p_secret text)
 returns setof text
 language plpgsql
@@ -103,8 +104,10 @@ begin
     raise exception 'not authorised' using errcode = '42501';
   end if;
   return query
-    select distinct s.symbol from public.eq_estimate_snapshots s
-    where s.snapshot_date > current_date - 90;
+    select s.symbol from public.eq_estimate_snapshots s
+    where s.snapshot_date > current_date - 90
+    union
+    select upper(w.symbol) from public.eq_watchlist_items w;
 end;
 $$;
 

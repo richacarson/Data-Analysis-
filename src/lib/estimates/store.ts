@@ -28,7 +28,7 @@ export async function recordSnapshots(rows: SnapshotRow[]): Promise<number> {
   return typeof data === 'number' ? data : 0;
 }
 
-/** Symbols with a snapshot in the past 90 days: anything someone has opened. */
+/** Symbols with a snapshot in the past 90 days (anything someone has opened) or on a watchlist. */
 export async function trackedSymbols(): Promise<string[]> {
   const w = writer();
   if (!w) return [];

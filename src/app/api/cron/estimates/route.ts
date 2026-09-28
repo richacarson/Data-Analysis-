@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 /**
- * Records today's consensus for every holding and every stock opened in the
- * past 90 days. Vercel Cron calls this daily with `Authorization: Bearer
+ * Records today's consensus for every holding, every watchlist name and every
+ * stock opened in the past 90 days. Vercel Cron calls this daily with `Authorization: Bearer
  * $CRON_SECRET`; nothing else can.
  */
 export async function GET(request: NextRequest) {
