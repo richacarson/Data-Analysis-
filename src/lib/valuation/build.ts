@@ -7,7 +7,7 @@ import {
   getFinancialScores,
   getEarningsHistory,
   getDividends,
-  getFxRate,
+  getConversion,
   getIncomeStatements,
   getIndustryPe,
   getRevenueSegments,
@@ -17,6 +17,7 @@ import {
   getRatiosTTM,
   getRiskFreeRate,
 } from '../fmp/endpoints';
+import { convertRows, type Conversion } from '../fmp/currency';
 import { discountedCashFlow, sensitivityGrid, type DcfAssumptions } from './dcf';
 import { adjustedFcfConversion, earningsDcf, fcfConversionRatio } from './earnings-dcf';
 import {
@@ -113,9 +114,9 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
 
   const [
     profile,
-    income,
-    cashflow,
-    balance,
+    rawIncome,
+    rawCashflow,
+    rawBalance,
     enterprise,
     estimates,
     metrics,
@@ -123,7 +124,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     scores,
     priceTarget,
     annualRatios,
-    quarterlyIncome,
+    rawQuarterlyIncome,
     segments,
     earningsHistory,
     dividends,
@@ -149,6 +150,28 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
   ]);
 
   if (!profile) throw new Error(`No profile found for ${ticker}`);
+
+  /*
+   * A foreign issuer's statements are converted to the quote's currency and
+   * share units up front, so every model below compares like with like. Where
+   * the rate is unavailable they stay as reported and the per-share models are
+   * withheld (see perShareModelsApply).
+   */
+  const reportingCurrency = (rawIncome[0]?.reportedCurrency ?? profile.currency ?? 'USD').toUpperCase();
+  const quoteCurrency = (profile.currency || 'USD').toUpperCase();
+  const fxConversion: Conversion | null = await optional(
+    'exchange rate',
+    getConversion(profile, reportingCurrency, rawIncome[0]?.weightedAverageShsOutDil ?? 0),
+    null,
+  );
+  const convert = <T extends object>(rows: T[]) => (fxConversion ? convertRows(rows, fxConversion) : rows);
+  const income = convert(rawIncome);
+  const cashflow = convert(rawCashflow);
+  const balance = convert(rawBalance);
+  const quarterlyIncome = convert(rawQuarterlyIncome);
+  const converted = fxConversion !== null && reportingCurrency !== quoteCurrency;
+  // FMP's own TTM per-share figures and invested capital stay in the reporting currency.
+  const fxRate = reportingCurrency === quoteCurrency ? 1 : (fxConversion?.fx ?? null);
 
   const latestIncome = income[0];
   const latestCash = cashflow[0];
@@ -217,11 +240,15 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
   // Analyst-implied forward growth takes precedence over extrapolated history.
   // The estimates feed includes years already reported; only the rest are forecasts.
   const sortedEstimates = forwardEstimates(estimates, latestIncome?.date ?? null);
-  const firstEstimate = sortedEstimates[0];
-  const lastEstimate = sortedEstimates[sortedEstimates.length - 1];
+  // Consensus is quoted per ADR already (TSMC's matches Seeking Alpha's dollar
+  // figures once converted), so only the currency changes, not the share basis.
+  const modelEstimates =
+    converted && fxConversion ? convertRows(sortedEstimates, { ...fxConversion, shareRatio: 1 }) : sortedEstimates;
+  const firstEstimate = modelEstimates[0];
+  const lastEstimate = modelEstimates[modelEstimates.length - 1];
   const forwardEpsCagr =
-    firstEstimate && lastEstimate && sortedEstimates.length > 1
-      ? cagr(firstEstimate.epsAvg, lastEstimate.epsAvg, sortedEstimates.length - 1)
+    firstEstimate && lastEstimate && modelEstimates.length > 1
+      ? cagr(firstEstimate.epsAvg, lastEstimate.epsAvg, modelEstimates.length - 1)
       : null;
 
   const seedGrowth = clamp(forwardEpsCagr ?? historicalFcfCagr ?? 0.05, -0.1, 0.35);
@@ -304,28 +331,38 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
   const epv = earningsPowerValue({
     ebit: latestIncome?.ebit ?? 0,
     taxRate,
-    investedCapital: metrics?.investedCapitalTTM ?? 0,
+    investedCapital: (metrics?.investedCapitalTTM ?? 0) * (converted ? (fxRate ?? 1) : 1),
     wacc: discountRate,
   });
   const epvPerShare = shares > 0 ? (epv - netDebt) / shares : 0;
 
   // ---- Model 5: relative multiples ----------------------------------------
-  const eps = ratios?.netIncomePerShareTTM ?? latestIncome?.epsDiluted ?? 0;
-  const fcfPerShare = ratios?.freeCashFlowPerShareTTM ?? (shares > 0 ? baseFcf / shares : 0);
-  const bookPerShare = ratios?.bookValuePerShareTTM ?? 0;
+  // FMP's TTM per-share figures are in the reporting currency and its share
+  // units; for a converted issuer they come from the converted statements.
+  const statementEquity = latestBalance?.totalStockholdersEquity ?? 0;
+  const eps = converted ? (latestIncome?.epsDiluted ?? 0) : (ratios?.netIncomePerShareTTM ?? latestIncome?.epsDiluted ?? 0);
+  const fcfPerShare = converted
+    ? shares > 0
+      ? baseFcf / shares
+      : 0
+    : (ratios?.freeCashFlowPerShareTTM ?? (shares > 0 ? baseFcf / shares : 0));
+  const bookPerShare = converted ? (shares > 0 ? statementEquity / shares : 0) : (ratios?.bookValuePerShareTTM ?? 0);
+  const trailingPe = converted ? (eps > 0 ? price / eps : 0) : (ratios?.priceToEarningsRatioTTM ?? 0);
+  const priceToFcf = converted ? (fcfPerShare > 0 ? price / fcfPerShare : 0) : (ratios?.priceToFreeCashFlowRatioTTM ?? 0);
+  const priceToBook = converted ? (bookPerShare > 0 ? price / bookPerShare : 0) : (ratios?.priceToBookRatioTTM ?? 0);
   const forwardEps = firstEstimate?.epsAvg ?? 0;
 
   const multiples: MultipleValuation[] = [];
   // Implied prices are per-share too, so they inherit the currency constraint.
   if (unitsComparable) {
-  if (eps > 0) multiples.push(valueOnMultiple('Historical P/E', ratios?.priceToEarningsRatioTTM ?? 0, eps, price));
+  if (eps > 0) multiples.push(valueOnMultiple('Historical P/E', trailingPe, eps, price));
   if (forwardEps > 0) multiples.push(valueOnMultiple('Forward P/E (consensus)', price / forwardEps, forwardEps, price));
-  if (fcfPerShare > 0) multiples.push(valueOnMultiple('P/FCF', ratios?.priceToFreeCashFlowRatioTTM ?? 0, fcfPerShare, price));
-  if (bookPerShare > 0) multiples.push(valueOnMultiple('P/B', ratios?.priceToBookRatioTTM ?? 0, bookPerShare, price));
+  if (fcfPerShare > 0) multiples.push(valueOnMultiple('P/FCF', priceToFcf, fcfPerShare, price));
+  if (bookPerShare > 0) multiples.push(valueOnMultiple('P/B', priceToBook, bookPerShare, price));
   }
 
   // ---- Growth-adjusted valuation ------------------------------------------
-  const trailingPeg = peg(ratios?.priceToEarningsRatioTTM ?? 0, (epsCagr5y ?? 0) * 100);
+  const trailingPeg = peg(trailingPe, (epsCagr5y ?? 0) * 100);
   const fwdPeg = forwardPeg(price, forwardEps, (forwardEpsCagr ?? 0) * 100);
 
   // ---- Quality -------------------------------------------------------------
@@ -371,10 +408,12 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
    * consensus, so a GAAP-anchored multiple applied to a consensus forecast
    * roughly doubles the target price.
    */
-  const adjustedEpsYears = annualAdjustedEps(
-    earningsHistory,
-    income.map((i) => ({ date: i.date, fiscalYear: i.fiscalYear })),
-  );
+  // A foreign issuer's earnings feed is not dependable on currency or share
+  // basis, so its history stays GAAP, as in the shared house calculation.
+  const adjustedEpsYears =
+    reportingCurrency === quoteCurrency
+      ? annualAdjustedEps(earningsHistory, income.map((i) => ({ date: i.date, fiscalYear: i.fiscalYear })))
+      : [];
   const basis = compareBases(
     income.map((i) => ({ fiscalYear: i.fiscalYear, epsDiluted: i.epsDiluted })),
     adjustedEpsYears,
@@ -419,7 +458,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
   const conversionBasis: 'adjusted' | 'gaap' =
     overrides.fcfConversion === undefined && adjustedConversion !== null ? 'adjusted' : 'gaap';
   const epsDcf = earningsDcf(
-    sortedEstimates.map((e) => ({
+    modelEstimates.map((e) => ({
       date: e.date,
       label: fiscalYearOf(e.date),
       epsAvg: e.epsAvg,
@@ -458,12 +497,6 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
    * withhold the expected return, consensus is converted at FMP's rate; the
    * cash-flow models, which need whole statements converted, stay withheld.
    */
-  const reportingCurrency = (latestIncome?.reportedCurrency ?? profile.currency ?? 'USD').toUpperCase();
-  const quoteCurrency = (profile.currency || 'USD').toUpperCase();
-  const fxRate =
-    reportingCurrency === quoteCurrency
-      ? 1
-      : await optional('exchange rate', getFxRate(reportingCurrency, quoteCurrency), null);
 
   // The house method, shared with the screen so the two always agree.
   const house = houseReturn({
@@ -504,7 +537,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     peBasis === 'adjusted'
       ? adjustedEpsYears.map((a) => ({ fiscalYear: a.year, epsDiluted: a.adjustedEps }))
       : income.map((i) => ({ fiscalYear: i.fiscalYear, epsDiluted: i.epsDiluted })),
-    sortedEstimates,
+    modelEstimates,
     fiscalYearOf,
   );
 
@@ -526,43 +559,58 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
   );
 
   // ---- Consensus of models -------------------------------------------------
+  /*
+   * A model is shown only if it applies to this business, returns a positive
+   * value, and lands within reach of the price. Bowlero's model put fair value
+   * 916% above the price and Clearvue's 1,268%: at that distance the inputs,
+   * not the company, are driving the answer. The page reads `shown` for every
+   * model, so an excluded one cannot leak through (JPMorgan's FCF DCF printed
+   * -$1,151.89 a share beneath a banner saying it was not shown).
+   */
+  const MAX_FAIR_VALUE_TO_PRICE = 4;
+  const graham = grahamNumber(eps, bookPerShare);
   const allCandidates = [
-    { label: 'FCF DCF', value: fcfDcf.fairValuePerShare, applies: fcfModelApplies },
-    { label: 'Earnings DCF', value: epsDcf.fairValuePerShare, applies: unitsComparable },
-    { label: 'Earnings power', value: epvPerShare, applies: unitsComparable },
-    {
-      label: 'Graham number',
-      value: grahamNumber(eps, bookPerShare) ?? 0,
-      applies: unitsComparable,
-    },
-  ];
+    { key: 'fcfDcf', label: 'FCF DCF', value: fcfDcf.fairValuePerShare, applies: fcfModelApplies },
+    { key: 'earningsDcf', label: 'Earnings DCF', value: epsDcf.fairValuePerShare, applies: unitsComparable },
+    { key: 'earningsPower', label: 'Earnings power', value: epvPerShare, applies: unitsComparable },
+    { key: 'graham', label: 'Graham number', value: graham ?? 0, applies: unitsComparable },
+  ] as const;
 
+  const shown = { fcfDcf: false, earningsDcf: false, earningsPower: false, graham: false };
   for (const c of allCandidates) {
-    if (c.applies && !(Number.isFinite(c.value) && c.value > 0)) {
+    if (!c.applies) continue;
+    if (!(Number.isFinite(c.value) && c.value > 0)) {
       modelNotes.push({
         label: c.label,
         reason: 'Excluded: the model returns a negative or undefined value for this company.',
       });
+    } else if (price > 0 && c.value > price * MAX_FAIR_VALUE_TO_PRICE) {
+      modelNotes.push({
+        label: c.label,
+        reason: `Excluded: its ${c.value.toFixed(2)} a share is more than ${MAX_FAIR_VALUE_TO_PRICE} times the price, a distance that says more about the inputs than the company.`,
+      });
+    } else {
+      shown[c.key] = true;
     }
   }
 
   const candidates = allCandidates
-    .filter((c) => c.applies && Number.isFinite(c.value) && c.value > 0)
+    .filter((c) => shown[c.key])
     .map(({ label, value }) => ({ label, value }));
 
   const intangiblesShare = metrics?.intangiblesToTotalAssetsTTM ?? 0;
   const valueRange = fairValueRange({
-    fcfDcf: { label: 'FCF DCF', value: fcfDcf.fairValuePerShare, applies: fcfModelApplies },
+    fcfDcf: { label: 'FCF DCF', value: fcfDcf.fairValuePerShare, applies: shown.fcfDcf },
     earningsDcf: {
       label: 'Earnings DCF',
       value: epsDcf.fairValuePerShare,
-      applies: unitsComparable,
+      applies: shown.earningsDcf,
     },
-    earningsPower: { label: 'Earnings power', value: epvPerShare, applies: unitsComparable },
+    earningsPower: { label: 'Earnings power', value: epvPerShare, applies: shown.earningsPower },
     graham: {
       label: 'Graham number',
-      value: grahamNumber(eps, bookPerShare),
-      applies: unitsComparable,
+      value: graham,
+      applies: shown.graham,
     },
     grahamInformative: grahamIsInformative(roic, intangiblesShare),
   });
@@ -656,11 +704,15 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     modelSpread: candidates,
     modelNotes,
     applicability: {
+      /** Which models passed every check; the page renders nothing else. */
+      shown,
       isFinancial,
       fcfModelApplies,
       reverseUsable: reverseUsable && currencyVerdict.applies,
       unitsComparable,
-      reportingCurrency: latestIncome?.reportedCurrency ?? null,
+      reportingCurrency,
+      /** Set when the statements were converted: from which currency, at what rate, and the ADR share ratio. */
+      conversion: converted && fxConversion ? fxConversion : null,
     },
     sensitivity: grid,
 
@@ -684,7 +736,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
 
     consensus: {
       priceTarget,
-      estimates: sortedEstimates.map((e) => ({ ...e, fiscalYear: fiscalYearOf(e.date) })),
+      estimates: modelEstimates.map((e) => ({ ...e, fiscalYear: fiscalYearOf(e.date) })),
     },
 
     series: {

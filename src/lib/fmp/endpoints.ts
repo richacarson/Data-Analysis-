@@ -1,4 +1,5 @@
 import { fmp, fmpList, TTL } from './client';
+import { depositaryRatio, IDENTITY, type Conversion } from './currency';
 import type {
   AnnualRatios,
   BatchQuote,
@@ -136,6 +137,24 @@ export async function getFxRate(from: string, to: string): Promise<number | null
   if (direct) return direct;
   const inverse = await read(`${to}${from}`);
   return inverse ? 1 / inverse : null;
+}
+
+/**
+ * How to put a company's statements in its quote's currency and share units,
+ * or null when the rate is unavailable. Domestic, non-ADR issuers get the
+ * identity: see currency.ts for why.
+ */
+export async function getConversion(
+  profile: Pick<Profile, 'currency' | 'marketCap' | 'price' | 'isAdr'>,
+  reportedCurrency: string | undefined,
+  statementShares: number,
+): Promise<Conversion | null> {
+  const to = (profile.currency || 'USD').toUpperCase();
+  const from = (reportedCurrency || to).toUpperCase();
+  if (from === to && !profile.isAdr) return { ...IDENTITY, from, to };
+  const fx = await getFxRate(from, to);
+  if (fx === null) return null;
+  return { fx, shareRatio: depositaryRatio(profile.marketCap, profile.price, statementShares), from, to };
 }
 
 /** Prices for many symbols in one request, so a screen is not N calls. */

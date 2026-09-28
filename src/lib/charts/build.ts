@@ -3,6 +3,8 @@ import 'server-only';
 import {
   getBalanceSheets,
   getCashFlowStatements,
+  getConversion,
+  getProfile,
   getEarningsHistory,
   getEstimates,
   getGeographicSegments,
@@ -10,6 +12,7 @@ import {
   getPriceHistory,
   getRevenueSegments,
 } from '../fmp/endpoints';
+import { convertRows } from '../fmp/currency';
 import { annualAdjustedEps } from '../valuation/earnings-basis';
 import { fiscalYearLabeler, forwardEstimates } from '../valuation/fiscal';
 import {
@@ -36,6 +39,8 @@ export interface ChartData {
   quarterly: PeriodRow[];
   ttm: PeriodRow[];
   annual: PeriodRow[];
+  /** Set when the statements were converted from the reporting currency. */
+  convertedFrom: { currency: string; fx: number; shareRatio: number } | null;
   /** Consensus years after the last reported one, annual view only. */
   estimates: { annual: PeriodRow[]; quarterly: PeriodRow[]; ttm: PeriodRow[] };
   /** Weekly closes with the valuation multiples at each, for continuous lines. */
@@ -80,7 +85,8 @@ export async function buildChartData(symbol: string): Promise<ChartData> {
 
   // Request shapes match the valuation page's exactly, so whichever tab loads
   // second is served from cache rather than spending API calls again.
-  const [incQ, incA, cfQ, cfA, bsQ, bsA, earnings, estimates, quarterEstimates, product, geographic] = await Promise.all([
+  const [profile, rawIncQ, rawIncA, rawCfQ, rawCfA, rawBsQ, rawBsA, earnings, rawEstimates, rawQuarterEstimates, product, geographic] = await Promise.all([
+    optional('profile', getProfile(ticker), null),
     optional('quarterly income', getIncomeStatements(ticker, 'quarter', 44), []),
     optional('annual income', getIncomeStatements(ticker, 'annual', 12), []),
     optional('quarterly cash flow', getCashFlowStatements(ticker, 'quarter', 44), []),
@@ -93,6 +99,26 @@ export async function buildChartData(symbol: string): Promise<ChartData> {
     optional('product segments', getRevenueSegments(ticker, 'annual'), []),
     optional('geographic segments', getGeographicSegments(ticker, 'annual'), []),
   ]);
+
+  // A foreign issuer's statements, in the quote's currency and ADR share units
+  // (see fmp/currency.ts). Without a rate they stay as reported, and say so.
+  const reporting = (rawIncA[0]?.reportedCurrency ?? rawIncQ[0]?.reportedCurrency ?? profile?.currency ?? 'USD').toUpperCase();
+  const quote = (profile?.currency || 'USD').toUpperCase();
+  const statementShares = rawIncQ[0]?.weightedAverageShsOutDil ?? rawIncA[0]?.weightedAverageShsOutDil ?? 0;
+  const conversion = profile ? await optional('exchange rate', getConversion(profile, reporting, statementShares), null) : null;
+  if (reporting !== quote && !conversion) issues.push(`Figures are in ${reporting}: no exchange rate to ${quote} was available.`);
+  const foreign = reporting !== quote;
+  const convert = <T extends object>(rows: T[]) => (conversion ? convertRows(rows, conversion) : rows);
+  const incQ = convert(rawIncQ);
+  const incA = convert(rawIncA);
+  const cfQ = convert(rawCfQ);
+  const cfA = convert(rawCfA);
+  const bsQ = convert(rawBsQ);
+  const bsA = convert(rawBsA);
+  // Consensus is per ADR already; only the currency changes.
+  const estimateConversion = conversion ? { ...conversion, shareRatio: 1 } : null;
+  const estimates = estimateConversion ? convertRows(rawEstimates, estimateConversion) : rawEstimates;
+  const quarterEstimates = estimateConversion ? convertRows(rawQuarterEstimates, estimateConversion) : rawQuarterEstimates;
 
   const earliest = [...incQ, ...incA].reduce(
     (min, r) => (r.date < min ? r.date : min),
@@ -113,7 +139,8 @@ export async function buildChartData(symbol: string): Promise<ChartData> {
     cfQ as unknown as CashFlowInput[],
     bsQ as unknown as BalanceInput[],
   );
-  attachAdjustedEps(quarters, earnings);
+  // The earnings feed's currency and share basis are not dependable for a foreign issuer.
+  attachAdjustedEps(quarters, foreign ? [] : earnings);
   const trailing = ttmRows(quarters);
   const years = annualRows(
     incA as unknown as IncomeInput[],
@@ -122,7 +149,9 @@ export async function buildChartData(symbol: string): Promise<ChartData> {
   );
 
   const fiscalYearEnds = incA.map((i) => ({ date: i.date, fiscalYear: i.fiscalYear }));
-  const adjustedByYear = new Map(annualAdjustedEps(earnings, fiscalYearEnds).map((a) => [a.year, a.adjustedEps]));
+  const adjustedByYear = new Map(
+    (foreign ? [] : annualAdjustedEps(earnings, fiscalYearEnds)).map((a) => [a.year, a.adjustedEps]),
+  );
   for (const y of years) y.epsAdjusted = adjustedByYear.get(y.fiscalYear) ?? null;
 
   const ttmByDate = new Map(trailing.map((t) => [t.date, t]));
@@ -150,6 +179,8 @@ export async function buildChartData(symbol: string): Promise<ChartData> {
     quarterly: compact(quarterly),
     ttm: compact(ttm),
     annual: compact(annual),
+    convertedFrom:
+      foreign && conversion ? { currency: reporting, fx: conversion.fx, shareRatio: conversion.shareRatio } : null,
     estimates: forward,
     weekly: compactWeekly(
       // Trailing quarters where they exist; fiscal years before them, so the

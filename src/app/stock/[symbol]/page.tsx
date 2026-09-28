@@ -78,7 +78,10 @@ export default async function StockPage({
   }
 
   const { profile, models, quality, growth, costOfCapital, growthAdjusted, consensus } = report;
-  const { fcfModelApplies, reverseUsable } = report.applicability;
+  const { reverseUsable, shown } = report.applicability;
+  // One place says why a model is missing; the panels only point to it.
+  const excludedNote = (label: string) =>
+    report.modelNotes.find((n) => n.label === label)?.reason ?? 'Not applicable to this company.';
   const currency = profile.currency || 'USD';
   const undervalued = report.upside > 0;
 
@@ -162,6 +165,15 @@ export default async function StockPage({
               <p className="mt-1 text-[12px] text-t4">
                 {[profile.sector, profile.industry, profile.country].filter(Boolean).join(' · ')}
               </p>
+              {report.applicability.conversion && (
+                <p className="mt-1 text-[11px] text-t4">
+                  Statements converted from {report.applicability.conversion.from} at{' '}
+                  {report.applicability.conversion.fx.toPrecision(4)} {currency} per {report.applicability.conversion.from}
+                  {report.applicability.conversion.shareRatio !== 1
+                    ? ` · per-share figures on the ADR basis (${num(report.applicability.conversion.shareRatio, 3)} ADRs per reported share)`
+                    : ''}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-baseline gap-3 border-t border-line pt-3 sm:block sm:shrink-0 sm:border-0 sm:pt-0 sm:text-right">
@@ -213,9 +225,15 @@ export default async function StockPage({
         />
         <Stat
           label="Upside to fair value"
-          value={signedPct(report.upside)}
-          tone={report.upside}
-          sub={undervalued ? 'Trading below models' : 'Trading above models'}
+          value={report.valueRange.midpoint !== null ? signedPct(report.upside) : '—'}
+          tone={report.valueRange.midpoint !== null ? report.upside : undefined}
+          sub={
+            report.valueRange.midpoint === null
+              ? 'No model applies'
+              : undervalued
+                ? 'Trading below models'
+                : 'Trading above models'
+          }
         />
         <Stat
           label="ROIC less WACC"
@@ -260,12 +278,14 @@ export default async function StockPage({
               />
             ))}
           </div>
-          <RangeBar
-            low={models.earningsDcf.bearFairValue}
-            high={models.earningsDcf.bullFairValue}
-            marker={report.price}
-            markerLabel={`Price ${money(report.price, currency)}`}
-          />
+          {shown.earningsDcf && (
+            <RangeBar
+              low={models.earningsDcf.bearFairValue}
+              high={models.earningsDcf.bullFairValue}
+              marker={report.price}
+              markerLabel={`Price ${money(report.price, currency)}`}
+            />
+          )}
           <div className="border-t border-line">
             <Row
               label="Analyst targets"
@@ -346,8 +366,10 @@ export default async function StockPage({
           models.earningsDcf.conversionBasis === 'adjusted' ? 'adjusted' : 'GAAP'
         } earnings`}
       >
-        <EpsProjectionChart data={epsChartData} />
-        <div className="stat-grid border-t border-line md:grid-cols-4">
+        {shown.earningsDcf ? (
+          <>
+            <EpsProjectionChart data={epsChartData} />
+            <div className="stat-grid border-t border-line md:grid-cols-4">
           <Stat label="Bear (analyst low)" value={money(models.earningsDcf.bearFairValue, currency)} />
           <Stat
             label="Base (consensus)"
@@ -360,7 +382,11 @@ export default async function StockPage({
             value={pct(models.earningsDcf.terminalValueShare)}
             sub="Lower is more defensible"
           />
-        </div>
+            </div>
+          </>
+        ) : (
+          <p className="px-4 py-6 text-[12px] leading-relaxed text-t3">{excludedNote('Earnings DCF')}</p>
+        )}
       </Panel>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -372,17 +398,21 @@ export default async function StockPage({
             models.fcfDcf.assumptions.terminalGrowth,
           )}`}
         >
-          {fcfModelApplies ? (
+          {shown.fcfDcf ? (
             <CashFlowChart data={models.fcfDcf.years} />
           ) : (
             <p className="border-b border-line px-4 py-6 text-[12px] leading-relaxed text-t3">
-              Not shown for this company. {report.applicability.isFinancial
-                ? 'For lenders and insurers, reported free cash flow tracks the loan book and deposit base rather than the economics of the business.'
-                : 'Trailing free cash flow is negative, so compounding it forward only produces a larger negative number.'}
+              {report.applicability.isFinancial
+                ? 'Not shown for this company. For lenders and insurers, reported free cash flow tracks the loan book and deposit base rather than the economics of the business.'
+                : report.modelNotes.some((n) => n.label === 'FCF DCF')
+                  ? excludedNote('FCF DCF')
+                  : excludedNote('Cash flow models')}
             </p>
           )}
-          <div className={fcfModelApplies ? 'border-t border-line' : ''}>
+          <div className={shown.fcfDcf ? 'border-t border-line' : ''}>
             <Row label="Base free cash flow" value={bigMoney(models.fcfDcf.baseCashFlow, currency)} />
+            {shown.fcfDcf && (
+              <>
             <Row label="PV of forecast" value={bigMoney(models.fcfDcf.pvOfForecast, currency)} />
             <Row label="PV of terminal value" value={bigMoney(models.fcfDcf.pvOfTerminalValue, currency)} />
             <Row label="Enterprise value" value={bigMoney(models.fcfDcf.enterpriseValue, currency)} />
@@ -393,6 +423,8 @@ export default async function StockPage({
               value={money(models.fcfDcf.fairValuePerShare, currency)}
               tone={models.fcfDcf.fairValuePerShare - report.price}
             />
+              </>
+            )}
           </div>
         </Panel>
 
@@ -415,14 +447,15 @@ export default async function StockPage({
           <Row label="Price / book" value={multiple(report.ratios?.priceToBookRatioTTM)} />
           <Row
             label="Graham number"
-            value={models.grahamNumber ? money(models.grahamNumber, currency) : '—'}
-            tone={models.grahamNumber ? models.grahamNumber - report.price : undefined}
+            value={shown.graham && models.grahamNumber ? money(models.grahamNumber, currency) : '—'}
+            tone={shown.graham && models.grahamNumber ? models.grahamNumber - report.price : undefined}
+            hint={shown.graham ? undefined : excludedNote('Graham number')}
           />
           <Row
             label="Earnings power value / share"
-            value={money(models.earningsPower.perShare, currency)}
-            hint="Value assuming zero growth — a floor"
-            tone={models.earningsPower.perShare - report.price}
+            value={shown.earningsPower ? money(models.earningsPower.perShare, currency) : '—'}
+            hint={shown.earningsPower ? 'Value assuming zero growth — a floor' : excludedNote('Earnings power')}
+            tone={shown.earningsPower ? models.earningsPower.perShare - report.price : undefined}
           />
         </Panel>
       </div>
@@ -521,7 +554,8 @@ export default async function StockPage({
         </Panel>
       )}
 
-      {/* ---- Sensitivity ---- */}
+      {/* ---- Sensitivity: of the FCF DCF, so only beside it ---- */}
+      {shown.fcfDcf && (
       <Panel
         eyebrow="Assumption range"
           title="Sensitivity — fair value per share"
@@ -529,6 +563,7 @@ export default async function StockPage({
       >
         <SensitivityTable grid={report.sensitivity} price={report.price} currency={currency} />
       </Panel>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* ---- Quality ---- */}

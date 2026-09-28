@@ -29,6 +29,7 @@ export interface Profile {
   isEtf: boolean;
   isActivelyTrading: boolean;
   isFund: boolean;
+  isAdr?: boolean;
 }
 
 export interface IncomeStatement {

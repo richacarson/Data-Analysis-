@@ -51,16 +51,12 @@ export const isFinancialSector = (sector: string, industry: string): boolean =>
 /**
  * Whether per-share valuations can be compared against the quoted price.
  *
- * A foreign issuer reports its accounts in its home currency while its ADR
- * trades in dollars. TSMC files in New Taiwan dollars — earnings of 333 and
- * book value of 1,248 a share — against an ADR quoted near $435. Nothing in the
- * data marks the unit, so a fair value computed from the statements looks like
- * enormous upside rather than a different currency: the Graham number alone
- * lands near $3,481, roughly 700% above the price.
- *
- * An ADR also represents some multiple of ordinary shares, and that ratio is
- * not in the feed, so the gap cannot be closed by an exchange rate alone.
- * Withholding the models is honest; converting them would be a guess.
+ * A foreign issuer reports in its home currency while its ADR trades in
+ * dollars. The build converts its statements first (see fmp/currency.ts), after
+ * which they are in the quote's currency and this passes. It fails only when no
+ * exchange rate was available: TSMC's New Taiwan dollar figures against an ADR
+ * near $435 would put its Graham number around $3,481, so the models are
+ * withheld rather than shown in the wrong unit.
  */
 export function perShareModelsApply(
   reportingCurrency: string | undefined,
@@ -73,7 +69,7 @@ export function perShareModelsApply(
     reason:
       `Not shown: the accounts are reported in ${reportingCurrency.toUpperCase()} while the shares trade in ` +
       `${tradingCurrency.toUpperCase()}. Per-share values from the statements are not comparable to the quoted ` +
-      `price, and the depositary ratio needed to reconcile them is not in the data.`,
+      `price, and no exchange rate was available to convert them.`,
   };
 }
 

@@ -68,6 +68,13 @@ export default async function ChartsPage({ params }: { params: Promise<{ symbol:
           <h1 className="mt-1 truncate font-serif text-[21px] leading-tight tracking-tight text-t1 sm:text-[24px]">
             {profile?.companyName ?? symbol}
           </h1>
+          {data.convertedFrom && (
+            <p className="mt-1 text-[11px] text-t4">
+              Reported in {data.convertedFrom.currency}, shown in {currency} at today&rsquo;s rate (
+              {data.convertedFrom.fx.toPrecision(4)})
+              {data.convertedFrom.shareRatio !== 1 ? ' · per-share figures per ADR' : ''}
+            </p>
+          )}
         </div>
         {profile && (
           <div className="flex items-baseline gap-3">
