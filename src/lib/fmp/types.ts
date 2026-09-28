@@ -211,6 +211,28 @@ export interface PriceTargetConsensus {
   targetMedian: number;
 }
 
+/** Average analyst price targets published over trailing windows. */
+export interface PriceTargetSummary {
+  symbol: string;
+  lastMonthCount: number;
+  lastMonthAvgPriceTarget: number;
+  lastQuarterCount: number;
+  lastQuarterAvgPriceTarget: number;
+  lastYearCount: number;
+  lastYearAvgPriceTarget: number;
+}
+
+/** Analyst rating counts at the start of each month. */
+export interface RatingsMonth {
+  symbol: string;
+  date: string;
+  analystRatingsStrongBuy: number;
+  analystRatingsBuy: number;
+  analystRatingsHold: number;
+  analystRatingsSell: number;
+  analystRatingsStrongSell: number;
+}
+
 export interface SearchResult {
   symbol: string;
   name: string;

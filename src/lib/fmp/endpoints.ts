@@ -16,6 +16,8 @@ import type {
   PriceBar,
   DividendRecord,
   PriceTargetConsensus,
+  PriceTargetSummary,
+  RatingsMonth,
   Profile,
   RatiosTTM,
   SearchResult,
@@ -63,6 +65,14 @@ export const getPriceTargetConsensus = (symbol: string) =>
   fmpList<PriceTargetConsensus>('price-target-consensus', { symbol }, TTL.estimates).then(
     (r) => r[0] ?? null,
   );
+
+/** Average price targets over the past month, quarter and year: how the Street's view has moved. */
+export const getPriceTargetSummary = (symbol: string) =>
+  fmpList<PriceTargetSummary>('price-target-summary', { symbol }, TTL.estimates).then((r) => r[0] ?? null);
+
+/** Buy/hold/sell counts month by month, newest first. */
+export const getRatingsHistory = (symbol: string, limit = 13) =>
+  fmpList<RatingsMonth>('grades-historical', { symbol, limit }, TTL.estimates);
 
 
 /**

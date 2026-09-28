@@ -50,7 +50,7 @@ export interface ScreenRow {
  * A screen over every holding is a few hundred requests; firing them all at
  * once gets the key rate-limited and the run comes back half empty.
  */
-async function pooled<T, R>(
+export async function pooled<T, R>(
   items: T[],
   limit: number,
   worker: (item: T) => Promise<R>,

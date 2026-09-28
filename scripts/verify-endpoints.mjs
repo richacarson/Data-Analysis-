@@ -73,6 +73,16 @@ const CHECKS = [
     fields: ['targetConsensus', 'targetHigh', 'targetLow'],
   },
   {
+    endpoint: 'price-target-summary',
+    params: { symbol: SYMBOL },
+    fields: ['lastMonthCount', 'lastQuarterAvgPriceTarget', 'lastYearAvgPriceTarget'],
+  },
+  {
+    endpoint: 'grades-historical',
+    params: { symbol: SYMBOL, limit: 3 },
+    fields: ['date', 'analystRatingsBuy', 'analystRatingsHold', 'analystRatingsSell'],
+  },
+  {
     // search-symbol matches ticker text, so it must be probed with a ticker.
     endpoint: 'search-symbol',
     params: { query: 'AAPL', limit: 3 },

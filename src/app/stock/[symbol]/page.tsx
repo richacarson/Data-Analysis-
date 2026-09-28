@@ -1,5 +1,9 @@
 import Link from 'next/link';
+import { after } from 'next/server';
 import { buildValuation } from '@/lib/valuation/build';
+import { getEstimates } from '@/lib/fmp/endpoints';
+import { snapshotRows } from '@/lib/estimates/revisions';
+import { canRecord, recordSnapshots } from '@/lib/estimates/store';
 import { Badge, Panel, RangeBar, Row, Stat } from '@/components/ui';
 import { CashFlowChart, EpsProjectionChart, HistoryChart, ModelSpreadChart } from '@/components/Charts';
 import { SensitivityTable } from '@/components/SensitivityTable';
@@ -47,6 +51,14 @@ export default async function StockPage({
   let report;
   try {
     report = await buildValuation(symbol, overrides);
+    // Opening a stock adds it to the estimate record (same request as the build, so a cache hit).
+    if (canRecord()) {
+      after(() =>
+        getEstimates(symbol.toUpperCase(), 'annual', 10)
+          .then((e) => recordSnapshots(snapshotRows(symbol, e)))
+          .catch(() => undefined),
+      );
+    }
   } catch (error) {
     return (
       <div className="panel p-8">

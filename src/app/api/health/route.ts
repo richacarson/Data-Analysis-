@@ -18,6 +18,8 @@ const CHECKS: Array<{ name: string; endpoint: string; params: Record<string, str
   { name: 'ratios TTM', endpoint: 'ratios-ttm', params: { symbol: 'AAPL' } },
   { name: 'financial scores', endpoint: 'financial-scores', params: { symbol: 'AAPL' } },
   { name: 'price target consensus', endpoint: 'price-target-consensus', params: { symbol: 'AAPL' } },
+  { name: 'price target summary', endpoint: 'price-target-summary', params: { symbol: 'AAPL' } },
+  { name: 'ratings history', endpoint: 'grades-historical', params: { symbol: 'AAPL', limit: '3' } },
   { name: 'symbol search', endpoint: 'search-symbol', params: { query: 'AAPL', limit: '1' } },
   { name: 'company name search', endpoint: 'search-name', params: { query: 'apple', limit: '1' } },
   { name: 'earnings history', endpoint: 'earnings', params: { symbol: 'AAPL', limit: '4' } },

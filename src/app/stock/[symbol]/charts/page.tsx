@@ -1,5 +1,10 @@
 import Link from 'next/link';
-import { getProfile } from '@/lib/fmp/endpoints';
+import { after } from 'next/server';
+import { getEstimates, getPriceTargetSummary, getProfile, getRatingsHistory } from '@/lib/fmp/endpoints';
+import { snapshotRows, summarizeRevisions } from '@/lib/estimates/revisions';
+import { canRecord, loadSnapshots, recordSnapshots } from '@/lib/estimates/store';
+import { fiscalYearLabeler } from '@/lib/valuation/fiscal';
+import { EstimateRevisions } from '@/components/charts/EstimateRevisions';
 import { buildChartData } from '@/lib/charts/build';
 import { ChartGallery } from '@/components/charts/ChartGallery';
 import { StockTabs } from '@/components/StockTabs';
@@ -20,6 +25,14 @@ export default async function ChartsPage({ params }: { params: Promise<{ symbol:
 
   let profile;
   let data;
+  // Side panels: a failure here should cost the panel, not the page.
+  const quiet = <T,>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
+  const side = Promise.all([
+    quiet(getEstimates(symbol, 'annual', 10), []),
+    quiet(loadSnapshots(symbol), []),
+    quiet(getPriceTargetSummary(symbol), null),
+    quiet(getRatingsHistory(symbol), []),
+  ]);
   try {
     [profile, data] = await Promise.all([getProfile(symbol), buildChartData(symbol)]);
   } catch (error) {
@@ -35,6 +48,14 @@ export default async function ChartsPage({ params }: { params: Promise<{ symbol:
   }
 
   const currency = profile?.currency || 'USD';
+
+  const [estimates, recorded, targets, ratings] = await side;
+  // Today's consensus joins the record now, so the table is never empty.
+  const today = snapshotRows(symbol, estimates);
+  const todayDate = today[0]?.snapshot_date;
+  const revisions = summarizeRevisions([...recorded.filter((r) => r.snapshot_date !== todayDate), ...today]);
+  if (canRecord() && today.length) after(() => recordSnapshots(today).catch(() => undefined));
+  const labelOf = fiscalYearLabeler(data.annual.map((r) => ({ date: r.date, fiscalYear: String(r.fiscalYear) })));
 
   return (
     <div className="space-y-4">
@@ -59,6 +80,15 @@ export default async function ChartsPage({ params }: { params: Promise<{ symbol:
         )}
       </div>
       <ChartGallery data={data} />
+      <EstimateRevisions
+        summary={revisions}
+        labelOf={labelOf}
+        price={profile?.price ?? null}
+        currency={currency}
+        targets={targets}
+        ratings={ratings}
+        recording={canRecord()}
+      />
     </div>
   );
 }
