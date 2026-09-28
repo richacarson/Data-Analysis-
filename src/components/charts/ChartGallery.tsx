@@ -356,7 +356,7 @@ function Segmented<T extends string>({
           onClick={() => onChange(o.key)}
           aria-pressed={value === o.key}
           className={`px-3 py-1.5 text-[12px] font-medium transition-colors ${
-            value === o.key ? 'bg-gold text-bg' : 'text-t3 hover:text-t1'
+            value === o.key ? 'bg-gold text-onGold' : 'text-t3 hover:text-t1'
           }`}
         >
           {o.label}

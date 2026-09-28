@@ -13,7 +13,7 @@ export default function NotFound() {
         <p className="mt-2 text-[13px] leading-relaxed text-t3">
           The link may be mistyped, or the ticker may not be covered.
         </p>
-        <Link href="/" className="mt-5 inline-block bg-gold px-3 py-2 text-[13px] font-semibold text-bg">
+        <Link href="/" className="mt-5 inline-block bg-gold px-3 py-2 text-[13px] font-semibold text-onGold">
           Back to Equity Lens
         </Link>
       </div>

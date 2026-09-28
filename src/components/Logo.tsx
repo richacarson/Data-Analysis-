@@ -26,16 +26,22 @@ export function ShieldMark({ className = 'h-6 w-auto' }: { className?: string })
   );
 }
 
-/** The white Paradiem logo, as the header's home link. */
+/**
+ * The Paradiem logo, as the header's home link.
+ *
+ * Painted through a CSS mask of the white PNG so it takes the ink colour of the
+ * active theme: Cream on navy, Navy on cream. Aspect ratio is the PNG's 824×226.
+ */
 export function Wordmark() {
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src="/brand/paradiem-logo-white.png"
-      alt="Paradiem"
-      width={824}
-      height={226}
-      className="h-7 w-auto sm:h-8"
+    <span
+      role="img"
+      aria-label="Paradiem"
+      className="block aspect-[824/226] h-7 bg-t1 sm:h-8"
+      style={{
+        WebkitMask: 'url(/brand/paradiem-logo-white.png) center / contain no-repeat',
+        mask: 'url(/brand/paradiem-logo-white.png) center / contain no-repeat',
+      }}
     />
   );
 }

@@ -80,7 +80,7 @@ export function SetPassword() {
       <button
         type="submit"
         disabled={state === 'saving'}
-        className="w-full bg-gold px-3 py-2.5 text-[14px] font-semibold text-bg transition-opacity hover:opacity-90 disabled:opacity-60 sm:py-2 sm:text-[13px]"
+        className="w-full bg-gold px-3 py-2.5 text-[14px] font-semibold text-onGold transition-opacity hover:opacity-90 disabled:opacity-60 sm:py-2 sm:text-[13px]"
       >
         {state === 'saving' ? 'Saving…' : 'Set password'}
       </button>

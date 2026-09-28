@@ -33,7 +33,7 @@ export function HoldingsBrowser({ sleeves }: { sleeves: Sleeve[] }) {
         </div>
         <Link
           href={`/screen?sleeve=${sleeve.key}`}
-          className="hidden shrink-0 pb-2.5 text-[12px] font-medium text-gold hover:underline sm:block"
+          className="hidden shrink-0 pb-2.5 text-[12px] font-medium text-goldInk hover:underline sm:block"
         >
           Screen {sleeve.name} →
         </Link>
@@ -42,15 +42,15 @@ export function HoldingsBrowser({ sleeves }: { sleeves: Sleeve[] }) {
         {sleeve.tickers.map((t) => (
           <Link
             key={t}
-            href={`/stock/${t}`}
-            className="tabular border border-line bg-card py-2 text-center text-[12px] font-medium text-t2 transition-colors hover:border-lineActive hover:text-gold sm:py-1.5 sm:text-[11px]"
+            href={`/stock/${t}?sleeve=${sleeve.key}`}
+            className="tabular border border-line bg-card py-2 text-center text-[12px] font-medium text-t2 transition-colors hover:border-lineActive hover:text-goldInk sm:py-1.5 sm:text-[11px]"
           >
             {t}
           </Link>
         ))}
       </div>
       <div className="border-t border-line px-4 py-2.5 sm:hidden">
-        <Link href={`/screen?sleeve=${sleeve.key}`} className="text-[12px] font-medium text-gold">
+        <Link href={`/screen?sleeve=${sleeve.key}`} className="text-[12px] font-medium text-goldInk">
           Screen {sleeve.name} →
         </Link>
       </div>

@@ -2,13 +2,84 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---- Theme tokens ------------------------------------------------------
+ * Dark is the default (today's navy look). Light is the 4a "Hairline" theme:
+ * Cream page, Parchment surfaces, Navy ink, brand Forest/Oxblood for status.
+ * Channels are "R G B" so Tailwind opacity modifiers work.
+ */
 :root {
   color-scheme: dark;
+  --bg: 23 23 56;          /* #171738 Navy */
+  --surface: 31 31 69;     /* #1F1F45 */
+  --card: 37 37 81;        /* #252551 */
+  --card-hover: 47 47 95;  /* #2F2F5F */
+  --elevated: 56 56 107;   /* #38386B */
+
+  --line: rgba(201, 168, 76, 0.12);
+  --hairline: rgba(201, 168, 76, 0.07);
+  --line-hover: rgba(201, 168, 76, 0.24);
+  --line-active: rgba(201, 168, 76, 0.4);
+  --rule: 250 247 242;     /* hero rules: Cream at 60% via border-rule/60 */
+
+  --t1: 250 247 242;       /* #FAF7F2 */
+  --t2: 244 239 228;       /* #F4EFE4 */
+  --t3: 184 180 172;       /* #B8B4AC */
+  --t4: 139 115 85;        /* #8B7355 */
+
+  --gold: 201 168 76;      /* #C9A84C */
+  --gold-ink: 201 168 76;
+  --gold-soft: rgba(201, 168, 76, 0.12);
+  --gold-glow: rgba(201, 168, 76, 0.3);
+
+  --up: 52 211 153;        /* #34D399 — bright enough to read on navy */
+  --dn: 248 113 113;       /* #F87171 */
+  --warn: 217 164 65;      /* #D9A441 */
+
+  --s1: 174 142 47;        /* #AE8E2F */
+  --s2: 93 130 216;        /* #5D82D8 */
+
+  --chart-grid: rgba(201, 168, 76, 0.1);
+  --chart-tick: #a09c94;
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+  --bg: 250 247 242;       /* #FAF7F2 Cream */
+  --surface: 244 239 228;  /* #F4EFE4 Parchment */
+  --card: 244 239 228;
+  --card-hover: 236 230 216; /* #ECE6D8 */
+  --elevated: 184 180 172; /* #B8B4AC Mist Gray */
+
+  --line: rgba(184, 180, 172, 0.8);
+  --hairline: rgba(184, 180, 172, 0.5);
+  --line-hover: rgba(23, 23, 56, 0.35);
+  --line-active: rgba(23, 23, 56, 0.6);
+  --rule: 23 23 56;
+
+  --t1: 23 23 56;          /* #171738 Navy ink */
+  --t2: 23 23 56;
+  --t3: 110 91 67;         /* #6E5B43 — Warm Taupe darkened to pass 4.5:1 on Cream */
+  --t4: 139 115 85;        /* #8B7355 Warm Taupe, labels ≥ 12px only */
+
+  --gold: 201 168 76;
+  --gold-ink: 139 115 85;
+  --gold-soft: rgba(201, 168, 76, 0.18);
+  --gold-glow: rgba(201, 168, 76, 0.35);
+
+  --up: 74 124 89;         /* #4A7C59 Forest */
+  --dn: 168 51 47;         /* #A8332F Oxblood */
+  --warn: 139 115 85;
+
+  --s1: 174 142 47;
+  --s2: 69 99 179;         /* periwinkle deepened for Cream */
+
+  --chart-grid: rgba(23, 23, 56, 0.08);
+  --chart-tick: #6e5b43;
 }
 
 html {
   -webkit-text-size-adjust: 100%;
-  background: #171738;
+  background: rgb(var(--bg));
 }
 
 body {
@@ -17,24 +88,20 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Keyboard focus is always visible; mouse and touch focus stays quiet. */
 :focus-visible {
-  outline: 1px solid #c9a84c;
+  outline: 1px solid rgb(var(--gold));
   outline-offset: 2px;
 }
 
-/* Numeric columns must align across rows to be scannable. */
 .tabular {
   @apply font-mono;
   font-variant-numeric: tabular-nums;
 }
 
 @layer components {
-  /* Flat, square-edged surfaces with a gold hairline — the brand's basic unit. */
   .panel {
     @apply border border-line bg-surface;
   }
-  /* Title over subtitle on phones; side by side once there is room. */
   .panel-head {
     @apply flex flex-col gap-1 border-b border-line px-4 py-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6;
   }
@@ -45,11 +112,6 @@ body {
     @apply text-[11px] leading-snug text-t3 sm:max-w-[55%] sm:text-right;
   }
 
-  /*
-   * Stat tiles divided by hairlines. The lines are the gap showing through,
-   * so they stay continuous however the tiles wrap — dividing borders break
-   * wherever a row ends early.
-   */
   .stat-grid {
     @apply grid grid-cols-2 gap-px bg-line;
   }
@@ -57,12 +119,8 @@ body {
     @apply bg-surface;
   }
 
-  /*
-   * The signature letterspaced uppercase label. The brand guide calls this the
-   * mark that appears in every header, footer and section divider.
-   */
   .eyebrow {
-    @apply text-[10px] font-semibold uppercase tracking-eyebrow text-gold;
+    @apply text-[10px] font-semibold uppercase tracking-eyebrow text-goldInk;
   }
   .eyebrow-muted {
     @apply text-[10px] font-semibold uppercase tracking-eyebrow text-t4;
@@ -75,6 +133,24 @@ body {
     @apply tabular text-[18px] font-semibold leading-tight text-t1 sm:text-[20px];
   }
 
+  /* ---- 4a Hairline hero figures ---- */
+  .hero-stat {
+    @apply flex flex-col gap-2 border-t border-rule/60 pt-[18px];
+  }
+  .hero-stat-lead {
+    @apply border-t-[3px] border-gold pt-4;
+  }
+  .hero-label {
+    @apply text-[13px] text-t3;
+  }
+  .hero-value {
+    @apply text-[40px] font-light leading-none tracking-hero text-t1 sm:text-[56px];
+    font-variant-numeric: tabular-nums;
+  }
+  .hero-sub {
+    @apply text-[13px] text-t1;
+  }
+
   .row {
     @apply flex items-center justify-between gap-4 border-b border-hairline px-4 py-2.5 text-[13px] last:border-0 sm:py-2;
   }
@@ -85,25 +161,21 @@ body {
     @apply tabular shrink-0 text-right font-medium text-t1;
   }
 
-  /* Georgia italic for editorial callouts, per the brand's pull-quote rule. */
   .pullquote {
     @apply font-serif text-[15px] italic leading-relaxed text-t2;
   }
 
   .btn {
-    @apply border border-line bg-card px-3 py-1.5 text-[12px] font-medium text-t1 transition-colors hover:border-lineActive hover:text-gold;
+    @apply border border-line bg-card px-3 py-1.5 text-[12px] font-medium text-t1 transition-colors hover:border-lineActive hover:text-goldInk;
   }
   .btn-primary {
-    @apply bg-gold px-3 py-2 text-[13px] font-semibold text-bg transition-opacity hover:opacity-90 disabled:opacity-60;
+    @apply bg-gold px-3 py-2 text-[13px] font-semibold text-onGold transition-opacity hover:opacity-90 disabled:opacity-60;
   }
-  /* 16px on phones: iOS zooms the page into any smaller input on focus. */
   .field {
     @apply w-full border border-line bg-card px-3 py-2 text-[16px] text-t1 outline-none placeholder:text-t4 focus:border-lineActive sm:text-[13px];
   }
 }
 
-/* An odd tile out on a two-column phone grid spans the row rather than
-   leaving a blank cell beside it. */
 @media (max-width: 767px) {
   .stat-grid > :last-child:nth-child(odd) {
     grid-column: span 2;
@@ -118,12 +190,12 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(201, 168, 76, 0.22);
+  background: rgb(var(--gold) / 0.22);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(201, 168, 76, 0.35);
+  background: rgb(var(--gold) / 0.35);
 }
 ::selection {
-  background: rgba(201, 168, 76, 0.4);
-  color: #faf7f2;
+  background: rgb(var(--gold) / 0.4);
+  color: rgb(var(--t1));
 }

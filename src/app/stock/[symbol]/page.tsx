@@ -9,6 +9,7 @@ import { CashFlowChart, EpsProjectionChart, HistoryChart, ModelSpreadChart } fro
 import { SensitivityTable } from '@/components/SensitivityTable';
 import { ExpectedReturnPanel } from '@/components/ExpectedReturn';
 import { StockTabs } from '@/components/StockTabs';
+import { StockHero } from '@/components/StockHero';
 import {
   EpsHistoryChart,
   IndexedChart,
@@ -25,7 +26,6 @@ import {
   num,
   pct,
   roundMoney,
-  signedPct,
 } from '@/lib/format';
 
 export const revalidate = 3600;
@@ -83,7 +83,6 @@ export default async function StockPage({
   const excludedNote = (label: string) =>
     report.modelNotes.find((n) => n.label === label)?.reason ?? 'Not applicable to this company.';
   const currency = profile.currency || 'USD';
-  const undervalued = report.upside > 0;
 
   const epsChartData = models.earningsDcf.years.map((y) => ({
     label: y.label,
@@ -105,8 +104,35 @@ export default async function StockPage({
     });
 
   return (
-    <div className="space-y-4">
-      <StockTabs symbol={report.symbol} active="valuation" />
+    <div className="space-y-6">
+      <StockHero
+        symbol={report.symbol}
+        companyName={profile.companyName}
+        sleeveKey={query.sleeve}
+        price={report.price}
+        change={profile.change}
+        changePercentage={profile.changePercentage}
+        currency={currency}
+        expectedCagr={report.expectedReturn.result?.totalCagr ?? null}
+        hurdle={report.expectedReturn.hurdle}
+        horizonYears={report.expectedReturn.horizonYears}
+        valueLow={report.valueRange.low}
+        valueHigh={report.valueRange.high}
+        upside={report.upside}
+        requiredExitMultiple={report.expectedReturn.requiredExitMultiple}
+      />
+
+      {report.applicability.conversion && (
+        <p className="-mt-3 text-[12px] text-t3">
+          Statements converted from {report.applicability.conversion.from} at{' '}
+          {report.applicability.conversion.fx.toPrecision(4)} {currency} per {report.applicability.conversion.from}
+          {report.applicability.conversion.shareRatio !== 1
+            ? ` · per-share figures on the ADR basis (${num(report.applicability.conversion.shareRatio, 3)} ADRs per reported share)`
+            : ''}
+        </p>
+      )}
+
+      <StockTabs symbol={report.symbol} active="valuation" sleeve={query.sleeve} />
 
       {/* Silently averaging whatever survived would misrepresent the result. */}
       {report.modelNotes.length > 0 && (
@@ -142,106 +168,6 @@ export default async function StockPage({
           </p>
         </div>
       )}
-
-      {/* ---- Company header ---- */}
-      <div className="panel">
-        <div className="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6 sm:px-5">
-          <div className="flex min-w-0 items-start gap-3.5">
-            {profile.image ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={profile.image}
-                alt=""
-                className="h-11 w-11 shrink-0 border border-line bg-t1 object-contain p-1 sm:h-12 sm:w-12"
-              />
-            ) : null}
-            <div className="min-w-0">
-              <p className="eyebrow">
-                {profile.exchange} · {report.symbol}
-              </p>
-              <h1 className="mt-1 font-serif text-[21px] leading-tight tracking-tight text-t1 sm:text-[24px]">
-                {profile.companyName}
-              </h1>
-              <p className="mt-1 text-[12px] text-t4">
-                {[profile.sector, profile.industry, profile.country].filter(Boolean).join(' · ')}
-              </p>
-              {report.applicability.conversion && (
-                <p className="mt-1 text-[11px] text-t4">
-                  Statements converted from {report.applicability.conversion.from} at{' '}
-                  {report.applicability.conversion.fx.toPrecision(4)} {currency} per {report.applicability.conversion.from}
-                  {report.applicability.conversion.shareRatio !== 1
-                    ? ` · per-share figures on the ADR basis (${num(report.applicability.conversion.shareRatio, 3)} ADRs per reported share)`
-                    : ''}
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="flex items-baseline gap-3 border-t border-line pt-3 sm:block sm:shrink-0 sm:border-0 sm:pt-0 sm:text-right">
-            <p className="eyebrow-muted hidden sm:block">Last price</p>
-            <div className="tabular text-[26px] font-semibold leading-none text-t1 sm:mt-1 sm:text-[28px]">
-              {money(report.price, currency)}
-            </div>
-            <div
-              className={`tabular text-[13px] sm:mt-1.5 ${profile.change >= 0 ? 'text-up' : 'text-dn'}`}
-            >
-              {profile.change >= 0 ? '+' : ''}
-              {num(profile.change)} ({signedPct(profile.changePercentage / 100)})
-            </div>
-          </div>
-        </div>
-        {/* The gold rule is the brand's one accent per view. */}
-        <div className="h-px bg-gold/40" />
-      </div>
-
-      {/* ---- Verdict strip ---- */}
-      <div className="panel stat-grid md:grid-cols-5">
-        <Stat
-          label={`Expected ${report.expectedReturn.horizonYears}y CAGR`}
-          value={report.expectedReturn.result ? pct(report.expectedReturn.result.totalCagr) : '—'}
-          tone={
-            report.expectedReturn.result
-              ? report.expectedReturn.result.totalCagr - report.expectedReturn.hurdle
-              : undefined
-          }
-          sub={`Against a ${pct(report.expectedReturn.hurdle, 0)} hurdle`}
-        />
-        <Stat
-          label="Must believe"
-          value={multiple(report.expectedReturn.requiredExitMultiple)}
-          sub={`Exit multiple for ${pct(report.expectedReturn.hurdle, 0)}`}
-        />
-        <Stat
-          label="Fair value range"
-          value={
-            report.valueRange.low !== null
-              ? `${roundMoney(report.valueRange.low, currency)} – ${roundMoney(report.valueRange.high!, currency)}`
-              : '—'
-          }
-          sub={
-            report.valueRange.models.length
-              ? report.valueRange.models.map((m) => m.label).join(' · ')
-              : 'No growth model applies here'
-          }
-        />
-        <Stat
-          label="Upside to fair value"
-          value={report.valueRange.midpoint !== null ? signedPct(report.upside) : '—'}
-          tone={report.valueRange.midpoint !== null ? report.upside : undefined}
-          sub={
-            report.valueRange.midpoint === null
-              ? 'No model applies'
-              : undervalued
-                ? 'Trading below models'
-                : 'Trading above models'
-          }
-        />
-        <Stat
-          label="ROIC less WACC"
-          value={pct(quality.economicSpread)}
-          tone={quality.economicSpread}
-          sub="Value created per dollar invested"
-        />
-      </div>
 
       <ExpectedReturnPanel
         expected={report.expectedReturn}

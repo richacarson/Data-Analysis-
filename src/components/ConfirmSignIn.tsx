@@ -97,7 +97,7 @@ export function ConfirmSignIn() {
           <p className="mt-2 text-[13px] leading-relaxed text-t3">{error}</p>
           <Link
             href="/login"
-            className="mt-5 inline-block bg-gold px-3 py-2 text-[13px] font-semibold text-bg"
+            className="mt-5 inline-block bg-gold px-3 py-2 text-[13px] font-semibold text-onGold"
           >
             Request a new link
           </Link>

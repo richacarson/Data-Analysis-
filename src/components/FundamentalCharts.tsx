@@ -16,13 +16,13 @@ import {
 } from 'recharts';
 import { bigMoney, num, pct } from '@/lib/format';
 
-const GRID = 'rgba(201,168,76,0.10)';
+const GRID = 'var(--chart-grid)';
 // Tick text is filled, not stroked: a stroke on glyphs smears them into a faux bold.
-const AXIS = { fill: '#A09C94', stroke: 'none', fontSize: 10, fontFamily: 'var(--font-plex-mono)' };
-const S1 = '#AE8E2F';
-const S2 = '#5D82D8';
-const UP = '#34D399';
-const DN = '#F87171';
+const AXIS = { fill: 'var(--chart-tick)', stroke: 'none', fontSize: 10, fontFamily: 'var(--font-plex-mono)' };
+const S1 = 'rgb(var(--s1))';
+const S2 = 'rgb(var(--s2))';
+const UP = 'rgb(var(--up))';
+const DN = 'rgb(var(--dn))';
 
 /**
  * Ordinal gold ramp for stacked composition, brightest first so the largest
@@ -33,16 +33,16 @@ const RAMP = ['#E2D09E', '#CEB574', '#B99B47', '#A58100', '#8C6900', '#724F00'];
 
 const tooltip = {
   contentStyle: {
-    background: '#252551',
-    border: '1px solid rgba(201,168,76,0.24)',
+    background: 'rgb(var(--card))',
+    border: '1px solid var(--line-hover)',
     borderRadius: 0,
     fontSize: 12,
     fontFamily: 'var(--font-dm-sans)',
   },
-  labelStyle: { color: '#FAF7F2', fontWeight: 600 },
-  cursor: { fill: 'rgba(201,168,76,0.06)' },
+  labelStyle: { color: 'rgb(var(--t1))', fontWeight: 600 },
+  cursor: { fill: 'rgb(var(--gold) / 0.06)' },
 };
-const legend = { wrapperStyle: { fontSize: 11, color: '#B8B4AC', paddingTop: 4 } };
+const legend = { wrapperStyle: { fontSize: 11, color: 'rgb(var(--t3))', paddingTop: 4 } };
 
 /** Trailing-twelve-month margin, quarter by quarter. */
 export function MarginTtmChart({
@@ -93,7 +93,7 @@ export function MarginTtmChart({
                     x={x + width / 2}
                     y={y - 6}
                     textAnchor="middle"
-                    fill="#FAF7F2"
+                    fill="rgb(var(--t1))"
                     fontSize={12}
                     fontWeight={600}
                     fontFamily="var(--font-plex-mono)"
@@ -122,7 +122,7 @@ export function EpsHistoryChart({
         <BarChart data={data} margin={{ top: 16, right: 12, left: 4, bottom: 4 }}>
           <defs>
             <pattern id="epsForecast" patternUnits="userSpaceOnUse" width={6} height={6}>
-              <rect width={6} height={6} fill="#171738" />
+              <rect width={6} height={6} fill="rgb(var(--surface))" />
               <path d="M0,6 l6,-6 M-1.5,1.5 l3,-3 M4.5,7.5 l3,-3" stroke={S1} strokeWidth={1.6} />
             </pattern>
           </defs>

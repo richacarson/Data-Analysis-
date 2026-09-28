@@ -4,7 +4,7 @@ import type { RevisionSummary, RevisionYear } from '@/lib/estimates/revisions';
 import type { PriceTargetSummary, RatingsMonth } from '@/lib/fmp/types';
 
 // The chart palette (MetricChart is a client module, so its constants are not importable here).
-const LINE_COLORS = ['#AE8E2F', '#5D82D8', '#B8B4AC'];
+const LINE_COLORS = ['rgb(var(--s1))', 'rgb(var(--s2))', 'rgb(var(--t3))'];
 
 function Change({ value }: { value: number | null }) {
   if (value === null) return <span className="text-t4">—</span>;
@@ -51,16 +51,16 @@ function RevisionLines({ years, labelOf }: { years: RevisionYear[]; labelOf: (d:
       <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Consensus EPS change since recording began">
         {[maxAbs, 0, -maxAbs].map((v) => (
           <g key={v}>
-            <line x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} stroke="rgba(201,168,76,0.07)" strokeWidth={v === 0 ? 1.5 : 1} />
-            <text x={pad.l - 6} y={y(v) + 3} textAnchor="end" fontSize="10" fill="#A09C94">
+            <line x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} stroke="var(--chart-grid)" strokeWidth={v === 0 ? 1.5 : 1} />
+            <text x={pad.l - 6} y={y(v) + 3} textAnchor="end" fontSize="10" fill="var(--chart-tick)">
               {signedPct(v)}
             </text>
           </g>
         ))}
-        <text x={pad.l} y={H - 6} fontSize="10" fill="#A09C94">
+        <text x={pad.l} y={H - 6} fontSize="10" fill="var(--chart-tick)">
           {monthLabel(new Date(t0).toISOString())}
         </text>
-        <text x={W - pad.r} y={H - 6} textAnchor="end" fontSize="10" fill="#A09C94">
+        <text x={W - pad.r} y={H - 6} textAnchor="end" fontSize="10" fill="var(--chart-tick)">
           {monthLabel(new Date(t1).toISOString())}
         </text>
         {lines.map((l, i) => (

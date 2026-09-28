@@ -17,13 +17,13 @@ export type ChartRow = Record<string, string | number | boolean | null | undefin
  * Brand tokens validated against the navy surface: gold columns, periwinkle
  * overlay, a dashed neutral for a third line, a gold ramp for composition.
  */
-export const S1 = '#AE8E2F';
-export const S2 = '#5D82D8';
-const NEUTRAL = '#B8B4AC';
-const BACKDROP = '#38386B';
-const SURFACE = '#1F1F45';
-const GRID = 'rgba(201,168,76,0.09)';
-const TICK = '#A09C94';
+export const S1 = 'rgb(var(--s1))';
+export const S2 = 'rgb(var(--s2))';
+const NEUTRAL = 'rgb(var(--t3))';
+const BACKDROP = 'rgb(var(--elevated))';
+const SURFACE = 'rgb(var(--surface))';
+const GRID = 'var(--chart-grid)';
+const TICK = 'var(--chart-tick)';
 const RAMP = ['#E2D09E', '#CEB574', '#B99B47', '#A58100', '#8C6900'];
 
 const CONTINUOUS = new Set<string>(CONTINUOUS_KEYS);
@@ -560,7 +560,7 @@ export function MetricChart({
 
             {leftTicks.map((v) => (
               <g key={`l${v}`}>
-                <line x1={m.left} x2={m.left + innerW} y1={yL(v)} y2={yL(v)} stroke={v === 0 && leftTicks[0] < 0 ? 'rgba(250,247,242,0.25)' : GRID} />
+                <line x1={m.left} x2={m.left + innerW} y1={yL(v)} y2={yL(v)} stroke={v === 0 && leftTicks[0] < 0 ? 'rgb(var(--t1) / 0.25)' : GRID} />
                 <text x={m.left - 6} y={yL(v) + 3} textAnchor="end" fontSize={10} fill={TICK} fontFamily="var(--font-plex-mono)">
                   {formatTick(v, spec.leftFormat)}
                 </text>
@@ -602,13 +602,13 @@ export function MetricChart({
               {paths}
             </g>
             {spec.average !== null && (
-              <text x={m.left + innerW / 2} y={yL(spec.average) - 5} textAnchor="middle" fontSize={10} fill="#D6D2CA" stroke={SURFACE} strokeWidth={4} paintOrder="stroke" fontFamily="var(--font-plex-mono)">
+              <text x={m.left + innerW / 2} y={yL(spec.average) - 5} textAnchor="middle" fontSize={10} fill="rgb(var(--t2))" stroke={SURFACE} strokeWidth={4} paintOrder="stroke" fontFamily="var(--font-plex-mono)">
                 Average {formatValue(spec.average, spec.leftFormat)}
               </text>
             )}
             {tags}
 
-            {hoverX !== null && <line x1={hoverX} x2={hoverX} y1={m.top} y2={m.top + innerH} stroke="rgba(250,247,242,0.35)" strokeWidth={1} />}
+            {hoverX !== null && <line x1={hoverX} x2={hoverX} y1={m.top} y2={m.top + innerH} stroke="rgb(var(--t1) / 0.35)" strokeWidth={1} />}
             {hoverLines.map(({ l, p }) => (
               <circle key={l.key} cx={x(p.t)} cy={yOf(l)(p.v)} r={4} fill={l.color} stroke={SURFACE} strokeWidth={2} />
             ))}

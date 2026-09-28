@@ -23,30 +23,30 @@ import { bigMoney, num } from '@/lib/format';
  * clear colour-vision separation against the navy surface, a third hue does
  * not. Anything beyond two series is drawn as a recessive backdrop instead.
  */
-const S1 = '#AE8E2F'; // gold
-const S2 = '#5D82D8'; // periwinkle
-const BACKDROP = '#38386B';
-const UP = '#34D399';
-const DN = '#F87171';
+const S1 = 'rgb(var(--s1))'; // gold
+const S2 = 'rgb(var(--s2))'; // periwinkle
+const BACKDROP = 'rgb(var(--elevated))';
+const UP = 'rgb(var(--up))';
+const DN = 'rgb(var(--dn))';
 
-const GRID = 'rgba(201,168,76,0.10)';
+const GRID = 'var(--chart-grid)';
 // Tick text is filled, not stroked: a stroke on glyphs smears them into a faux bold.
-const AXIS = { fill: '#A09C94', stroke: 'none', fontSize: 10, fontFamily: 'var(--font-plex-mono)' };
+const AXIS = { fill: 'var(--chart-tick)', stroke: 'none', fontSize: 10, fontFamily: 'var(--font-plex-mono)' };
 
 // Square-edged, flat — no shadow, matching the brand's print rules.
 const tooltip = {
   contentStyle: {
-    background: '#252551',
-    border: '1px solid rgba(201,168,76,0.24)',
+    background: 'rgb(var(--card))',
+    border: '1px solid var(--line-hover)',
     borderRadius: 0,
     fontSize: 12,
     fontFamily: 'var(--font-dm-sans)',
   },
-  labelStyle: { color: '#FAF7F2', fontWeight: 600 },
-  cursor: { fill: 'rgba(201,168,76,0.06)' },
+  labelStyle: { color: 'rgb(var(--t1))', fontWeight: 600 },
+  cursor: { fill: 'rgb(var(--gold) / 0.06)' },
 };
 
-const legend = { wrapperStyle: { fontSize: 11, color: '#B8B4AC', paddingTop: 4 } };
+const legend = { wrapperStyle: { fontSize: 11, color: 'rgb(var(--t3))', paddingTop: 4 } };
 
 /** Projected EPS from analyst consensus, split into covered and faded years. */
 export function EpsProjectionChart({
@@ -222,13 +222,13 @@ export function ModelSpreadChart({
               is drawn explicitly rather than left implicit in the colours. */}
           <ReferenceLine
             x={price}
-            stroke="#FAF7F2"
+            stroke="rgb(var(--t1))"
             strokeWidth={1}
             strokeDasharray="3 3"
             label={{
               value: 'Price',
               position: 'top',
-              fill: '#B8B4AC',
+              fill: 'rgb(var(--t3))',
               fontSize: 10,
             }}
           />

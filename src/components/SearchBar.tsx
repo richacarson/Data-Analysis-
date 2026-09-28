@@ -83,10 +83,10 @@ export function SearchBar() {
         onKeyDown={onKeyDown}
         placeholder="Search ticker or company"
         aria-label="Search for a stock"
-        className="w-full border border-line bg-surface px-3 py-2 text-[16px] text-t1 outline-none placeholder:text-t3 focus:border-lineActive sm:py-1.5 sm:text-[13px]"
+        className="w-full border-0 border-b border-rule/60 bg-transparent px-0 py-2 text-[16px] text-t1 outline-none placeholder:text-t3 focus:border-rule sm:text-[14px]"
       />
       {open && results.length > 0 && (
-        <ul className="absolute left-0 right-0 top-full z-40 mt-1 max-h-80 overflow-auto border border-line bg-card py-1 shadow-xl">
+        <ul className="absolute left-0 right-0 top-full z-40 mt-1 max-h-80 overflow-auto border border-line bg-card py-1">
           {results.map((r, i) => (
             <li key={`${r.symbol}-${i}`}>
               <button

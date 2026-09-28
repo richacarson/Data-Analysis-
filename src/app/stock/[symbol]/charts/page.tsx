@@ -8,7 +8,7 @@ import { EstimateRevisions } from '@/components/charts/EstimateRevisions';
 import { buildChartData } from '@/lib/charts/build';
 import { ChartGallery } from '@/components/charts/ChartGallery';
 import { StockTabs } from '@/components/StockTabs';
-import { money, num, signedPct } from '@/lib/format';
+import { num, signedPct } from '@/lib/format';
 
 export const revalidate = 3600;
 // Room to wait out an FMP rate-limit window rather than fail the page.
@@ -19,8 +19,15 @@ export async function generateMetadata({ params }: { params: Promise<{ symbol: s
   return { title: `${symbol.toUpperCase()} charts — Equity Lens` };
 }
 
-export default async function ChartsPage({ params }: { params: Promise<{ symbol: string }> }) {
+export default async function ChartsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ symbol: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { symbol: raw } = await params;
+  const { sleeve } = await searchParams;
   const symbol = raw.toUpperCase();
 
   let profile;
@@ -58,34 +65,30 @@ export default async function ChartsPage({ params }: { params: Promise<{ symbol:
   const labelOf = fiscalYearLabeler(data.annual.map((r) => ({ date: r.date, fiscalYear: String(r.fiscalYear) })));
 
   return (
-    <div className="space-y-4">
-      <StockTabs symbol={symbol} active="charts" />
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
-        <div className="min-w-0">
-          <p className="eyebrow">
-            {profile?.exchange ?? ''} · {symbol}
-          </p>
-          <h1 className="mt-1 truncate font-serif text-[21px] leading-tight tracking-tight text-t1 sm:text-[24px]">
-            {profile?.companyName ?? symbol}
-          </h1>
-          {data.convertedFrom && (
-            <p className="mt-1 text-[11px] text-t4">
-              Reported in {data.convertedFrom.currency}, shown in {currency} at today&rsquo;s rate (
-              {data.convertedFrom.fx.toPrecision(4)})
-              {data.convertedFrom.shareRatio !== 1 ? ' · per-share figures per ADR' : ''}
-            </p>
-          )}
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <h1 className="text-[40px] font-bold leading-none tracking-[-0.03em] text-t1 sm:text-[48px]">{symbol}</h1>
+          <span className="text-[18px] text-t3 sm:text-[20px]">{profile?.companyName ?? ''}</span>
         </div>
         {profile && (
           <div className="flex items-baseline gap-3">
-            <span className="tabular text-[22px] font-semibold text-t1">{money(profile.price, currency)}</span>
-            <span className={`tabular text-[13px] ${profile.change >= 0 ? 'text-up' : 'text-dn'}`}>
+            <span className="text-[28px] font-light tracking-hero text-t1">{num(profile.price)}</span>
+            <span className={`text-[13px] ${profile.change >= 0 ? 'text-up' : 'text-dn'}`}>
               {profile.change >= 0 ? '+' : ''}
               {num(profile.change)} ({signedPct(profile.changePercentage / 100)})
             </span>
           </div>
         )}
       </div>
+      {data.convertedFrom && (
+        <p className="-mt-3 text-[12px] text-t3">
+          Reported in {data.convertedFrom.currency}, shown in {currency} at today&rsquo;s rate (
+          {data.convertedFrom.fx.toPrecision(4)})
+          {data.convertedFrom.shareRatio !== 1 ? ' · per-share figures per ADR' : ''}
+        </p>
+      )}
+      <StockTabs symbol={symbol} active="charts" sleeve={sleeve} />
       <ChartGallery data={data} />
       <EstimateRevisions
         summary={revisions}

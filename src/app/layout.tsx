@@ -3,11 +3,12 @@ import { DM_Sans, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { AppHeader, MobileTabBar } from '@/components/AppChrome';
 import { VersionWatcher } from '@/components/VersionWatcher';
+import { themeInitScript } from '@/components/ThemeToggle';
 
-// The same pairing the Paradiem Dashboard uses.
+// 300 added for the 4a light-weight hero figures.
 const dmSans = DM_Sans({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+  weight: ['300', '400', '500', '600', '700'],
   variable: '--font-dm-sans',
   display: 'swap',
 });
@@ -37,15 +38,12 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
   },
   formatDetection: { telephone: false },
-  // Next emits only the standards tag (mobile-web-app-capable); iOS still keys
-  // full-screen home-screen launch off Apple's own name for it.
   other: { 'apple-mobile-web-app-capable': 'yes' },
   robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
   themeColor: '#171738',
-  colorScheme: 'dark',
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
@@ -53,11 +51,14 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${dmSans.variable} ${plexMono.variable}`}>
+    <html lang="en" data-theme="dark" suppressHydrationWarning className={`${dmSans.variable} ${plexMono.variable}`}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body>
         <AppHeader />
 
-        <main className="mx-auto max-w-[1400px] px-3 pb-24 pt-4 sm:px-5 sm:pt-6 md:pb-10">{children}</main>
+        <main className="mx-auto max-w-[1400px] px-4 pb-24 pt-4 sm:px-14 sm:pt-5 md:pb-12">{children}</main>
 
         <MobileTabBar />
         <VersionWatcher />
