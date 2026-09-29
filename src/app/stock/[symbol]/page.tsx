@@ -32,6 +32,12 @@ export const revalidate = 3600;
 // Room to wait out an FMP rate-limit window rather than fail the page.
 export const maxDuration = 120;
 
+/** A usable exit multiple from the query string, or undefined. */
+function validExitPe(raw: string | undefined): number | undefined {
+  const n = raw ? Number(raw) : Number.NaN;
+  return Number.isFinite(n) && n > 0 && n <= 200 ? n : undefined;
+}
+
 export default async function StockPage({
   params,
   searchParams,
@@ -46,6 +52,8 @@ export default async function StockPage({
     discountRate: query.discountRate ? Number(query.discountRate) : undefined,
     terminalGrowth: query.terminalGrowth ? Number(query.terminalGrowth) : undefined,
     forecastYears: query.forecastYears ? Number(query.forecastYears) : undefined,
+    // Your own exit multiple, for names where the answer hangs on a re-rating (NatWest).
+    exitPe: validExitPe(query.exitPe),
   };
 
   let report;
@@ -118,6 +126,12 @@ export default async function StockPage({
         expectedCagr={report.expectedReturn.result?.totalCagr ?? null}
         hurdle={report.expectedReturn.hurdle}
         horizonYears={Number(report.expectedReturn.yearsToHorizon.toFixed(1))}
+        userExitPe={report.expectedReturn.exitPeOverridden ? report.expectedReturn.exitPe : null}
+        totalReturn={
+          report.expectedReturn.result
+            ? Math.pow(1 + report.expectedReturn.result.totalCagr, report.expectedReturn.yearsToHorizon) - 1
+            : null
+        }
         valueLow={report.valueRange.low}
         valueHigh={report.valueRange.high}
         upside={report.upside}
@@ -178,6 +192,8 @@ export default async function StockPage({
       )}
 
       <ExpectedReturnPanel
+        symbol={report.symbol}
+        sleeve={query.sleeve}
         expected={report.expectedReturn}
         price={report.price}
         currency={currency}

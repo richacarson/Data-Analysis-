@@ -13,6 +13,7 @@ import { expectedReturn, implausibleReturn, justifiedPriceEarnings, requiredExit
 import { exitMultipleAnchors, median, type ExitMultipleAnchors } from './exit-multiple';
 import { fiscalYearLabeler, pickCoveredHorizon } from './fiscal';
 import { costOfEquity } from './wacc';
+import { isFinancialSector } from './applicability';
 
 /**
  * A P/E this high comes from a year of near-zero earnings, not from what the
@@ -20,6 +21,9 @@ import { costOfEquity } from './wacc';
  * its exit multiple at 113x.
  */
 export const MAX_HISTORICAL_PE = 100;
+
+/** An industry P/E older than this is not today's sector rating. */
+export const MAX_INDUSTRY_AGE_DAYS = 14;
 
 /** Years of own history needed before its high caps the exit multiple. */
 export const MIN_HISTORY_FOR_CAP = 3;
@@ -40,7 +44,11 @@ export interface HouseInputs {
   annual: Array<{ date: string; fiscalYear: string; priceToEarningsRatio: number; netIncomePerShare: number }>;
   earnings: Array<{ date: string; epsActual: number | null }>;
   /** Industry P/E rows over the past year, per exchange per day. */
-  industryPe: Array<{ date: string; pe: number }>;
+  industryPe: Array<{ date: string; pe: number; exchange?: string; industry?: string }>;
+  /** Where the stock trades, to match the industry rows against. */
+  exchange?: string;
+  sector?: string;
+  industry?: string;
   roic: number;
   beta: number;
   riskFreeRate: number;
@@ -66,6 +74,8 @@ export interface HouseResult {
   anchors: ExitMultipleAnchors;
   exitPe: number | null;
   exitPeSource: string | null;
+  /** The exit multiple the anchors (and cap) give, before any manual override. */
+  modelExitPe: number | null;
   /** Set when the anchors exceeded the company's own highest P/E and were capped to it. */
   exitCapNote: string | null;
   peBasis: 'adjusted' | 'gaap';
@@ -112,12 +122,32 @@ export function houseReturn(input: HouseInputs): HouseResult {
   );
 
   // ---- Sector: today's industry multiple and its past year ---------------
+  /*
+   * FMP publishes industry P/Es per exchange, and lately for NASDAQ alone.
+   * Atmos Energy (NYSE) was anchored on 8.0x: two NASDAQ "Regulated Gas" rows
+   * from October 2025, treated as today's sector rating. A figure only counts
+   * if it is recent and describes companies on the stock's own exchange.
+   */
   let industryNow: number | null = null;
   let industryMedian: number | null = null;
+  let industryExcluded: string | null = null;
   if (input.industryPe.length) {
-    const latest = input.industryPe.reduce((a, r) => (r.date > a ? r.date : a), input.industryPe[0].date);
-    industryNow = median(input.industryPe.filter((r) => r.date === latest).map((r) => r.pe));
-    industryMedian = median(input.industryPe.map((r) => r.pe));
+    const exchange = input.exchange?.toUpperCase();
+    const onExchange = exchange
+      ? input.industryPe.filter((r) => (r.exchange ?? '').toUpperCase() === exchange)
+      : input.industryPe;
+    const pool = onExchange.length ? onExchange : input.industryPe;
+    const latest = pool.reduce((a, r) => (r.date > a ? r.date : a), pool[0].date);
+    industryNow = median(pool.filter((r) => r.date === latest).map((r) => r.pe));
+    industryMedian = median(pool.map((r) => r.pe));
+    const ageDays = (today.getTime() - Date.parse(`${latest.slice(0, 10)}T00:00:00Z`)) / 86_400_000;
+    const name = input.industry ?? pool[0].industry ?? 'industry';
+    if (!onExchange.length) {
+      const exchanges = [...new Set(input.industryPe.map((r) => r.exchange).filter(Boolean))].join(' and ');
+      industryExcluded = `Excluded: FMP's ${name} figure covers ${exchanges || 'another exchange'}-listed companies only, and this stock trades on ${input.exchange}. A different, often much smaller set of companies is not its peer group.`;
+    } else if (ageDays > MAX_INDUSTRY_AGE_DAYS) {
+      industryExcluded = `Excluded: FMP's latest ${name} figure is from ${latest.slice(0, 10)}, ${Math.round(ageDays / 30)} months old, so it says nothing about the sector's rating today.`;
+    }
   }
 
   // ---- What the returns on capital justify --------------------------------
@@ -132,12 +162,22 @@ export function houseReturn(input: HouseInputs): HouseResult {
   // what returns on capital can fund, so fast growers still get an anchor.
   const sustainableGrowth = Math.max(0, Math.min(forwardEpsCagr ?? 0, input.roic * 0.9, ke - 0.02));
   const justified = justifiedPriceEarnings(input.roic, sustainableGrowth, ke);
+  // Regulated utilities earn close to their cost of capital by design and a
+  // lender's ROIC describes nothing, so the formula gave Atmos Energy 2.6x.
+  const sectorText = `${input.sector ?? ''} ${input.industry ?? ''}`;
+  const justifiedExcluded = /utilit|regulated/i.test(sectorText)
+    ? 'Excluded: a regulated utility earns close to its cost of capital by design, so this formula returns a multiple no utility trades at.'
+    : isFinancialSector(input.sector ?? '', input.industry ?? '')
+      ? "Excluded: return on invested capital does not describe a lender's or insurer's economics, so the formula has nothing sound to work from."
+      : null;
 
   const anchors = exitMultipleAnchors({
     ownHistory,
     industryPe: industryNow,
     industryMedian,
     justified,
+    industryExcluded,
+    justifiedExcluded,
     industryNotComparable:
       peBasis === 'adjusted' && basis.materialGap && basis.medianRatio
         ? `Excluded: industry multiples are computed on GAAP earnings, and this company's adjusted earnings run ${basis.medianRatio.toFixed(2)}x GAAP. Applied to adjusted consensus they would overstate the exit price.`
@@ -149,12 +189,14 @@ export function houseReturn(input: HouseInputs): HouseResult {
   // on re-ratings toward US peers. Without an override, the exit multiple
   // stops at the highest P/E the company has actually carried.
   const ownMax = ownHistory.length >= MIN_HISTORY_FOR_CAP ? Math.max(...ownHistory) : null;
-  const capped =
-    input.exitPeOverride === undefined && ownMax !== null && anchors.recommended !== null && anchors.recommended > ownMax;
-  const exitPe = input.exitPeOverride ?? (capped ? ownMax : anchors.recommended) ?? null;
+  const capBinds = ownMax !== null && anchors.recommended !== null && anchors.recommended > ownMax;
+  // What the model would use; an override replaces it but it is still reported.
+  const modelExitPe = (capBinds ? ownMax : anchors.recommended) ?? null;
+  const capped = input.exitPeOverride === undefined && capBinds;
+  const exitPe = input.exitPeOverride ?? modelExitPe;
   const exitPeSource =
     input.exitPeOverride !== undefined
-      ? 'Manual override'
+      ? `your own exit multiple${modelExitPe !== null ? ` (the model's is ${modelExitPe.toFixed(1)}x)` : ''}`
       : capped
         ? "the company's own highest historical P/E (capped)"
         : anchors.recommendedSource;
@@ -196,6 +238,7 @@ export function houseReturn(input: HouseInputs): HouseResult {
     anchors,
     exitPe,
     exitPeSource,
+    modelExitPe,
     exitCapNote,
     peBasis,
     basis,

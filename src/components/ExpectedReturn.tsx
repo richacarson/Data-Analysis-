@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { ValuationReport } from '@/lib/valuation/build';
 import { Badge, Panel, Row, Stat } from './ui';
 import { money, multiple, num, pct, signedPct } from '@/lib/format';
@@ -11,10 +12,14 @@ type Expected = ValuationReport['expectedReturn'];
  * I believe" is the more answerable question.
  */
 export function ExpectedReturnPanel({
+  symbol,
+  sleeve,
   expected,
   price,
   currency,
 }: {
+  symbol: string;
+  sleeve?: string;
   expected: Expected;
   price: number;
   currency: string;
@@ -123,7 +128,13 @@ export function ExpectedReturnPanel({
           tone={result.totalCagr - expected.hurdle}
           sub={`${pct(result.priceCagr)} price + ${pct(expected.dividendYield)} ${
             expected.dividendMethod === 'trailing' ? 'trailing' : 'forward'
-          } yield`}
+          } yield${
+            // Under two years, annualizing magnifies the move: NatWest's -35% over
+            // 1.3 years reads as -16% a year. The plain total says it straight.
+            expected.yearsToHorizon < 2
+              ? ` · ${signedPct(Math.pow(1 + result.totalCagr, expected.yearsToHorizon) - 1)} in total`
+              : ''
+          }`}
         />
         <Stat
           label={`Target price ${expected.horizonFiscalYear ?? ''}`}
@@ -161,6 +172,35 @@ export function ExpectedReturnPanel({
           forecast is quoted on. The median survives one anchor being wrong in either direction;
           the minimum would let a stale one decide the answer.
         </p>
+        <form method="get" action={`/stock/${symbol}`} className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+          {sleeve && <input type="hidden" name="sleeve" value={sleeve} />}
+          <label htmlFor="exitPe" className="text-[12px] text-t3">
+            Your exit multiple
+          </label>
+          <input
+            id="exitPe"
+            name="exitPe"
+            type="number"
+            step="0.1"
+            min="1"
+            max="200"
+            inputMode="decimal"
+            defaultValue={expected.exitPeOverridden && expected.exitPe !== null ? expected.exitPe : undefined}
+            placeholder={expected.modelExitPe !== null ? expected.modelExitPe.toFixed(1) : ''}
+            className="field w-24 sm:w-24"
+          />
+          <button type="submit" className="text-[13px] font-medium text-t1 hover:text-goldInk">
+            Apply
+          </button>
+          {expected.exitPeOverridden && (
+            <Link
+              href={`/stock/${symbol}${sleeve ? `?sleeve=${encodeURIComponent(sleeve)}` : ''}`}
+              className="text-[13px] text-t3 hover:text-t1"
+            >
+              Reset to the model&rsquo;s {expected.modelExitPe !== null ? `${expected.modelExitPe.toFixed(1)}×` : ''}
+            </Link>
+          )}
+        </form>
       </div>
       {anchors.map((a) => (
         <Row

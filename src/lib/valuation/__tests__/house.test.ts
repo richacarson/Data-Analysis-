@@ -101,4 +101,32 @@ describe('houseReturn', () => {
     }
     expect(r.anchors.recommendedSource).not.toMatch(/5 anchors/);
   });
+
+  it('ignores an industry figure from another exchange or a past date (Atmos Energy)', () => {
+    const stale = [
+      { date: '2025-10-14', pe: 8.03, exchange: 'NASDAQ', industry: 'Regulated Gas' },
+      { date: '2025-10-13', pe: 7.56, exchange: 'NASDAQ', industry: 'Regulated Gas' },
+    ];
+    const nyse = houseReturn(base({ industryPe: stale, exchange: 'NYSE', industry: 'Regulated Gas' }));
+    const industry = nyse.anchors.anchors.filter((a) => a.label.startsWith('Industry'));
+    expect(industry.every((a) => a.excluded)).toBe(true);
+    expect(industry[0].detail).toMatch(/NASDAQ-listed companies only/);
+
+    const nasdaqButOld = houseReturn(base({ industryPe: stale, exchange: 'NASDAQ', industry: 'Regulated Gas' }));
+    expect(nasdaqButOld.anchors.anchors.find((a) => a.label === 'Industry now')?.detail).toMatch(/months old/);
+
+    const fresh = houseReturn(
+      base({ industryPe: [{ date: '2026-09-24', pe: 22, exchange: 'NASDAQ' }], exchange: 'NASDAQ' }),
+    );
+    expect(fresh.anchors.anchors.find((a) => a.label === 'Industry now')?.excluded).toBeFalsy();
+  });
+
+  it('drops the ROIC-justified anchor for utilities and lenders', () => {
+    const utility = houseReturn(base({ sector: 'Utilities', industry: 'Regulated Gas' }));
+    expect(utility.anchors.anchors.find((a) => a.label.startsWith('Justified'))?.excluded).toBe(true);
+    const bank = houseReturn(base({ sector: 'Financial Services', industry: 'Banks - Regional' }));
+    expect(bank.anchors.anchors.find((a) => a.label.startsWith('Justified'))?.excluded).toBe(true);
+    const industrial = houseReturn(base({ sector: 'Industrials', industry: 'Tools' }));
+    expect(industrial.anchors.anchors.find((a) => a.label.startsWith('Justified'))?.excluded).toBeFalsy();
+  });
 });

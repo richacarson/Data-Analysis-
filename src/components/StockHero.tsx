@@ -21,6 +21,8 @@ export function StockHero({
   valueLow,
   valueHigh,
   requiredExitMultiple,
+  totalReturn,
+  userExitPe,
 }: {
   symbol: string;
   companyName: string;
@@ -38,6 +40,10 @@ export function StockHero({
   /** Kept for callers; the range note now reads price against low/high directly. */
   upside?: number;
   requiredExitMultiple: number | null;
+  /** Total (not annualized) return to the horizon; shown when the horizon is under two years. */
+  totalReturn?: number | null;
+  /** Set when the return uses your own exit multiple rather than the model's. */
+  userExitPe?: number | null;
 }) {
   const sym = symbol.toUpperCase();
   const sleeve =
@@ -98,7 +104,13 @@ export function StockHero({
           <span className={`hero-value ${expectedCagr !== null ? toneClass(expectedCagr - hurdle) : ''}`}>
             {pct(expectedCagr)}
           </span>
-          <span className="hero-sub">vs {pct(hurdle, 0)} hurdle</span>
+          <span className="hero-sub">
+            vs {pct(hurdle, 0)} hurdle
+            {horizonYears < 2 && totalReturn !== null && totalReturn !== undefined
+              ? ` · ${signedPct(totalReturn)} in total`
+              : ''}
+            {userExitPe ? ` · at your ${multiple(userExitPe, 1)}×` : ''}
+          </span>
         </div>
         <div className="hero-stat">
           <span className="hero-label">Price</span>

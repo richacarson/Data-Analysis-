@@ -63,6 +63,10 @@ export interface AnchorInputs {
    * above GAAP they overstate the multiple the forecast should carry.
    */
   industryNotComparable?: string | null;
+  /** Set when the industry figures describe other companies (another exchange) or a past date. */
+  industryExcluded?: string | null;
+  /** Set when returns on capital cannot justify a multiple for this kind of business. */
+  justifiedExcluded?: string | null;
 }
 
 /**
@@ -127,6 +131,15 @@ export function exitMultipleAnchors(input: AnchorInputs): ExitMultipleAnchors {
     if (!(a.value > 0) || a.value > MAX_INDUSTRY_PE) {
       a.excluded = true;
       a.detail = `Excluded: an industry P/E of ${a.value.toFixed(1)}x reflects constituents with near-zero or negative earnings, not a multiple the sector trades on.`;
+    }
+  }
+
+  for (const a of anchors) {
+    if (a.value === null) continue;
+    const reason = a.label.startsWith('Industry') ? input.industryExcluded : a.label.startsWith('Justified') ? input.justifiedExcluded : null;
+    if (reason) {
+      a.excluded = true;
+      a.detail = reason;
     }
   }
 

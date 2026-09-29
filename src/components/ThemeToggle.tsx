@@ -7,15 +7,15 @@ const KEY = 'eq-theme';
 
 /**
  * Runs before first paint (inlined in layout.tsx <head>) so the page never
- * flashes the wrong theme. Stored choice wins; otherwise follow the OS.
+ * flashes the wrong theme. A stored choice wins; otherwise light.
  */
-export const themeInitScript = `(function(){try{var t=localStorage.getItem('${KEY}');if(!t){t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'}document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',t==='light'?'#FAF7F2':'#171738')}catch(e){}})();`;
+export const themeInitScript = `(function(){try{var t=localStorage.getItem('${KEY}');if(t!=='dark'&&t!=='light'){t='light'}document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',t==='light'?'#FAF7F2':'#171738')}catch(e){}})();`;
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>('dark');
+  const [theme, setTheme] = useState<Theme>('light');
 
   useEffect(() => {
-    setTheme((document.documentElement.dataset.theme as Theme) || 'dark');
+    setTheme((document.documentElement.dataset.theme as Theme) || 'light');
   }, []);
 
   const flip = () => {

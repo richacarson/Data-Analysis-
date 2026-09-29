@@ -43,7 +43,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#171738',
+  themeColor: '#FAF7F2',
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
@@ -51,7 +51,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="dark" suppressHydrationWarning className={`${dmSans.variable} ${plexMono.variable}`}>
+    <html lang="en" data-theme="light" suppressHydrationWarning className={`${dmSans.variable} ${plexMono.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
