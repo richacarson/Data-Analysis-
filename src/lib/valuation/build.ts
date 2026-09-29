@@ -47,6 +47,7 @@ import { latestCapexSplit } from './capex';
 import { fiscalYearLabeler, forwardEstimates, pickCoveredHorizon } from './fiscal';
 import { forwardDividend } from './dividends';
 import { houseReturn } from './house';
+import { peerPes } from './peers';
 import {
   adjustedPeHistory,
   annualAdjustedEps,
@@ -485,6 +486,9 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
   );
 
 
+  // The sector anchor: listed peers' P/Es, falling back to FMP's industry figure.
+  const peers = await optional('peer P/Es', peerPes(ticker), []);
+
   // Industry P/E over the past year; the shared calculation reduces it.
   const industryRows = profile.industry
     ? await optional(
@@ -511,6 +515,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
     annual: annualRatios,
     earnings: earningsHistory,
     industryPe: industryRows,
+    peers,
     exchange: profile.exchange,
     sector: profile.sector,
     industry: profile.industry,

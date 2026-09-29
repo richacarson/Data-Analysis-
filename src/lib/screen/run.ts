@@ -8,12 +8,14 @@ import {
   getFxRate,
   getIndustryPe,
   getKeyMetricsTTM,
+  getRatiosTTM,
   getProfile,
   getRiskFreeRate,
 } from '../fmp/endpoints';
 import { forwardDividend } from '../valuation/dividends';
 import { forwardEstimates } from '../valuation/fiscal';
 import { houseReturn } from '../valuation/house';
+import { peerPes } from '../valuation/peers';
 import { listingIssue } from '../valuation/applicability';
 import { DEFAULT_ERP, DEFAULT_HORIZON_YEARS, DEFAULT_HURDLE } from '../valuation/build';
 
@@ -94,6 +96,8 @@ export async function runScreen(
   };
   const fx = new Map<string, Promise<number | null>>();
   const industries = new Map<string, Promise<Array<{ date: string; pe: number }>>>();
+  // Holdings share peers (the utilities list each other), so each is priced once per run.
+  const peerRatios = new Map<string, Promise<Awaited<ReturnType<typeof getRatiosTTM>>>>();
   const riskFree = getRiskFreeRate();
   const yearAgo = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
   const today = new Date().toISOString().slice(0, 10);
@@ -154,6 +158,7 @@ export async function runScreen(
         annual,
         earnings,
         industryPe,
+        peers: await peerPes(symbol, (peer) => once(peerRatios, peer, () => getRatiosTTM(peer).catch(() => null))),
         exchange: profile?.exchange,
         sector: profile?.sector,
         industry: profile?.industry,

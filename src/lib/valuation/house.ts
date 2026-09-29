@@ -14,6 +14,7 @@ import { exitMultipleAnchors, median, type ExitMultipleAnchors } from './exit-mu
 import { fiscalYearLabeler, pickCoveredHorizon } from './fiscal';
 import { costOfEquity } from './wacc';
 import { isFinancialSector } from './applicability';
+import { peerMedian, type PeerPe } from './peer-pe';
 
 /**
  * A P/E this high comes from a year of near-zero earnings, not from what the
@@ -45,6 +46,8 @@ export interface HouseInputs {
   earnings: Array<{ date: string; epsActual: number | null }>;
   /** Industry P/E rows over the past year, per exchange per day. */
   industryPe: Array<{ date: string; pe: number; exchange?: string; industry?: string }>;
+  /** Trailing P/Es of the company's listed peers; their median is the sector anchor when enough are usable. */
+  peers?: PeerPe[];
   /** Where the stock trades, to match the industry rows against. */
   exchange?: string;
   sector?: string;
@@ -178,6 +181,7 @@ export function houseReturn(input: HouseInputs): HouseResult {
     justified,
     industryExcluded,
     justifiedExcluded,
+    peers: input.peers ? peerMedian(input.peers) : null,
     industryNotComparable:
       peBasis === 'adjusted' && basis.materialGap && basis.medianRatio
         ? `Excluded: industry multiples are computed on GAAP earnings, and this company's adjusted earnings run ${basis.medianRatio.toFixed(2)}x GAAP. Applied to adjusted consensus they would overstate the exit price.`

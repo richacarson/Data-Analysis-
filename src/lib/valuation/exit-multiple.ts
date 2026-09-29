@@ -1,3 +1,5 @@
+import type { PeerMedian } from './peer-pe';
+
 /**
  * Choosing the exit multiple.
  *
@@ -67,6 +69,11 @@ export interface AnchorInputs {
   industryExcluded?: string | null;
   /** Set when returns on capital cannot justify a multiple for this kind of business. */
   justifiedExcluded?: string | null;
+  /**
+   * Median trailing P/E of the company's listed peers. When present it is the
+   * sector anchor, in place of FMP's industry figures (see peer-pe.ts).
+   */
+  peers?: PeerMedian | null;
 }
 
 /**
@@ -85,6 +92,17 @@ export interface AnchorInputs {
  * of multiple deserves a human.
  */
 export function exitMultipleAnchors(input: AnchorInputs): ExitMultipleAnchors {
+  const peerAnchor: MultipleAnchor | null = input.peers
+    ? {
+        label: 'Peer median',
+        value: input.peers.value,
+        detail: `Median trailing P/E of ${input.peers.used.length} peers FMP lists: ${input.peers.used
+          .map((p) => `${p.symbol} ${p.pe.toFixed(1)}x`)
+          .join(', ')}${
+          input.peers.dropped.length ? `. Left out, with no earnings or a P/E over 100x: ${input.peers.dropped.join(', ')}` : ''
+        }. On GAAP earnings; anchoring here imports the peers' rating as-is.`,
+      }
+    : null;
   const tenYear = median(input.ownHistory.slice(0, 10));
   const fiveYear = median(input.ownHistory.slice(0, 5));
 
@@ -100,18 +118,22 @@ export function exitMultipleAnchors(input: AnchorInputs): ExitMultipleAnchors {
       detail:
         'Closer to the business as it trades today. Where it diverges from the 10-year figure, the company or its rating has changed.',
     },
-    {
-      label: 'Industry now',
-      value: input.industryPe ?? null,
-      detail:
-        'Current industry multiple, on GAAP earnings. Anchoring here imports the sector rating as-is.',
-    },
-    {
-      label: 'Industry median',
-      value: input.industryMedian ?? null,
-      detail:
-        'The industry over the past year, on GAAP earnings, so a sector trading at an extreme is visible rather than inherited.',
-    },
+    ...(peerAnchor
+      ? [peerAnchor]
+      : [
+          {
+            label: 'Industry now',
+            value: input.industryPe ?? null,
+            detail:
+              'Current industry multiple, on GAAP earnings. Anchoring here imports the sector rating as-is.',
+          },
+          {
+            label: 'Industry median',
+            value: input.industryMedian ?? null,
+            detail:
+              'The industry over the past year, on GAAP earnings, so a sector trading at an extreme is visible rather than inherited.',
+          },
+        ]),
     {
       label: 'Justified by ROIC',
       value: input.justified ?? null,
@@ -145,7 +167,7 @@ export function exitMultipleAnchors(input: AnchorInputs): ExitMultipleAnchors {
 
   if (input.industryNotComparable) {
     for (const a of anchors) {
-      if (a.label.startsWith('Industry') && a.value !== null) {
+      if ((a.label.startsWith('Industry') || a.label.startsWith('Peer')) && a.value !== null) {
         a.excluded = true;
         a.detail = input.industryNotComparable;
       }

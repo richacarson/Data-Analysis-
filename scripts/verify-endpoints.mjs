@@ -73,6 +73,11 @@ const CHECKS = [
     fields: ['targetConsensus', 'targetHigh', 'targetLow'],
   },
   {
+    endpoint: 'stock-peers',
+    params: { symbol: SYMBOL },
+    fields: ['symbol', 'companyName'],
+  },
+  {
     endpoint: 'price-target-summary',
     params: { symbol: SYMBOL },
     fields: ['lastMonthCount', 'lastQuarterAvgPriceTarget', 'lastYearAvgPriceTarget'],

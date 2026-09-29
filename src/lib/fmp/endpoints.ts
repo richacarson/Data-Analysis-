@@ -67,6 +67,14 @@ export const getPriceTargetConsensus = (symbol: string) =>
     (r) => r[0] ?? null,
   );
 
+/** Companies FMP lists as peers (similar size, same business), closest first. */
+export const getPeers = (symbol: string) =>
+  fmpList<{ symbol: string; companyName: string; price: number; mktCap: number }>(
+    'stock-peers',
+    { symbol },
+    TTL.search,
+  );
+
 /** Average price targets over the past month, quarter and year: how the Street's view has moved. */
 export const getPriceTargetSummary = (symbol: string) =>
   fmpList<PriceTargetSummary>('price-target-summary', { symbol }, TTL.estimates).then((r) => r[0] ?? null);
