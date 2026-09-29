@@ -33,13 +33,16 @@ export default async function ScreenPage({
 
   const scored = rows.filter((r) => r.expectedCagr !== null);
   // Implausible outputs (a currency mix-up, a broken feed) are kept out of
-  // every count and the median rather than topping the ranking.
+  // every count and the average rather than topping the ranking.
   const held = rows.filter((r) => r.review);
   // A pass that rests on one or two analysts is counted separately: FRHC
   // cleared on a single estimate, which is not the same claim as twenty.
   const thin = (r: (typeof rows)[number]) => r.analystCount > 0 && r.analystCount < 3;
   const clearing = scored.filter((r) => r.clearsHurdle && !thin(r));
   const clearingThin = scored.filter((r) => r.clearsHurdle && thin(r));
+  // An equal-weighted sleeve returns the average of its holdings, so that is
+  // the headline; the median beside it shows whether a few names skew it.
+  const average = scored.length > 0 ? scored.reduce((sum, r) => sum + r.expectedCagr!, 0) / scored.length : null;
   const median =
     scored.length > 0
       ? [...scored].sort((a, b) => a.expectedCagr! - b.expectedCagr!)[
@@ -94,9 +97,14 @@ export default async function ScreenPage({
           }
         />
         <Stat
-          label="Median expected CAGR"
-          value={median !== null ? `${(median * 100).toFixed(1)}%` : '—'}
-          tone={median !== null ? median - hurdle : undefined}
+          label="Average expected CAGR"
+          value={average !== null ? `${(average * 100).toFixed(1)}%` : '—'}
+          tone={average !== null ? average - hurdle : undefined}
+          sub={
+            median !== null
+              ? `Equal-weighted across ${scored.length} scored · median ${(median * 100).toFixed(1)}%`
+              : undefined
+          }
         />
         <Stat
           label="Not scored"
