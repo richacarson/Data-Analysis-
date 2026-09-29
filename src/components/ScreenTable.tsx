@@ -119,7 +119,7 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
                           : 'text-dn'
                     }`}
                   >
-                    {r.expectedCagr !== null ? signedPct(r.expectedCagr) : '—'}
+                    {r.expectedCagr !== null ? `${r.growthCapped ? '≤ ' : ''}${signedPct(r.expectedCagr)}` : '—'}
                   </span>
                 </div>
                 {r.horizonNote && <p className="mt-1 text-[11px] text-warn">{r.horizonNote}</p>}
@@ -260,7 +260,12 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
                           : 'text-dn'
                     }`}
                   >
-                    {r.expectedCagr !== null ? signedPct(r.expectedCagr) : (
+                    {r.expectedCagr !== null ? (
+                      <span title={r.growthCapped ? 'Upper bound: fast grower, exit capped at today\'s multiple' : undefined}>
+                        {r.growthCapped ? '≤ ' : ''}
+                        {signedPct(r.expectedCagr)}
+                      </span>
+                    ) : (
                       <span className="text-[10px] font-normal" title={r.note}>
                         {r.note ?? '—'}
                       </span>

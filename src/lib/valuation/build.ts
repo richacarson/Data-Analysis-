@@ -704,6 +704,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
       modelExitPe: house.modelExitPe,
       exitPeOverridden: overrides.exitPe !== undefined,
       exitCapNote: house.exitCapNote,
+      growthCapped: house.growthCapped,
       anchors: house.anchors.anchors,
       peBasis: house.peBasis,
       basis: house.basis,

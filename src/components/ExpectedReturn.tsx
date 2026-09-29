@@ -71,7 +71,9 @@ export function ExpectedReturnPanel({
       )}
       {expected.exitCapNote && (
         <div className="border-b border-line bg-warn/[0.08] px-4 py-3">
-          <Badge tone="flat">Exit multiple capped</Badge>
+          <Badge tone="flat">
+            {expected.growthCapped ? "Fast grower: exit capped at today's multiple · upper bound" : 'Exit multiple capped'}
+          </Badge>
           <p className="mt-2 text-[12px] leading-relaxed text-t3">{expected.exitCapNote}</p>
         </div>
       )}

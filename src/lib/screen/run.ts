@@ -44,6 +44,11 @@ export interface ScreenRow {
   horizonExtendedFrom?: string;
   /** Exit multiple capped at the company's own highest historical P/E. */
   exitCapNote?: string;
+  /** Capped at today's multiple as a fast grower: the return is an upper bound. */
+  growthCapped?: boolean;
+  /** The exit and return before the fast-grower cap, for reviewing what it changed. */
+  beforeGrowthCap?: { exitPe: number; totalCagr: number } | null;
+  epsGrowthToHorizon?: number | null;
   /** Held out of the ranking: the output is implausible and needs a look. */
   review?: string;
   /** Reporting currency, where it differs from the dollar quote. */
@@ -195,6 +200,9 @@ export async function runScreen(
         horizonNote: house.horizonNote ?? undefined,
         horizonExtendedFrom: house.horizonExtended?.fromFiscalYear,
         exitCapNote: house.exitCapNote ?? undefined,
+        growthCapped: house.growthCapped,
+        beforeGrowthCap: house.beforeGrowthCap,
+        epsGrowthToHorizon: house.epsGrowthToHorizon,
         convertedFrom: reported !== quote ? reported : undefined,
       };
 

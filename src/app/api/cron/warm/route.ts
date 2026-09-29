@@ -21,6 +21,22 @@ export async function GET(request: NextRequest) {
   const extra = await trackedSymbols().catch(() => []);
   const symbols = [...new Set([...ALL_SLEEVE_TICKERS, ...extra.map((s) => s.toUpperCase())])];
   const rows = await runScreen(symbols);
+  // ?report=growth-cap lists every name the fast-grower cap changed, before and after.
+  if (request.nextUrl.searchParams.get('report') === 'growth-cap') {
+    const changed = rows
+      .filter((r) => r.growthCapped && r.beforeGrowthCap)
+      .map((r) => ({
+        symbol: r.symbol,
+        epsGrowth: r.epsGrowthToHorizon,
+        exitBefore: r.beforeGrowthCap!.exitPe,
+        exitAfter: r.exitPe,
+        cagrBefore: r.beforeGrowthCap!.totalCagr,
+        cagrAfter: r.expectedCagr,
+        horizon: r.horizonFiscalYear,
+      }))
+      .sort((a, b) => a.symbol.localeCompare(b.symbol));
+    return NextResponse.json({ symbols: rows.length, scored: rows.filter((r) => r.expectedCagr !== null).length, changed });
+  }
   return NextResponse.json({
     symbols: rows.length,
     scored: rows.filter((r) => r.expectedCagr !== null).length,

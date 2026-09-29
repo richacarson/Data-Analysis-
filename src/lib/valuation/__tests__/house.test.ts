@@ -172,4 +172,29 @@ describe('houseReturn', () => {
     expect(r.horizonExtended!.fromFiscalYear).toBe('2028');
     expect(r.horizonNote).toMatch(/published only to FY2028/);
   });
+
+  it('caps a fast grower at today\'s multiple of current-year consensus (TOST)', () => {
+    // Toast: $30.46, consensus $1.39 / $1.73 / $2.18 / $2.66 for FY2026-29; own history 38-60x.
+    const forward = [
+      { date: '2026-12-31', epsAvg: 1.3858, epsLow: 1.33, epsHigh: 1.42, numAnalystsEps: 13 },
+      { date: '2027-12-31', epsAvg: 1.7269, epsLow: 1.65, epsHigh: 1.82, numAnalystsEps: 13 },
+      { date: '2028-12-31', epsAvg: 2.1817, epsLow: 1.69, epsHigh: 2.53, numAnalystsEps: 10 },
+      { date: '2029-12-31', epsAvg: 2.6646, epsLow: 2.59, epsHigh: 2.75, numAnalystsEps: 4 },
+    ];
+    const annual = base().annual.map((r, i) => ({ ...r, priceToEarningsRatio: [38, 41, 45, 60, 52][i] }));
+    const r = houseReturn(base({ price: 30.46, forward, annual, dividendYield: 0 }));
+    expect(r.growthCapped).toBe(true);
+    expect(r.exitPe!).toBeCloseTo(30.46 / 1.3858, 2);
+    expect(r.beforeGrowthCap!.exitPe).toBeGreaterThan(38);
+    expect(r.beforeGrowthCap!.totalCagr).toBeGreaterThan(r.expected!.totalCagr);
+    expect(r.exitCapNote).toMatch(/upper bound/);
+    expect(r.exitPeSource).toMatch(/fast-grower cap/);
+  });
+
+  it('leaves a slow grower free to revert toward its history', () => {
+    const r = houseReturn(base({ price: 60 }));
+    // Base consensus grows 10% a year; today's 12x sits below its 20x history.
+    expect(r.growthCapped).toBe(false);
+    expect(r.exitPe!).toBeGreaterThan(60 / 5);
+  });
 });

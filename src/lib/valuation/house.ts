@@ -26,6 +26,9 @@ export const MAX_HISTORICAL_PE = 100;
 /** An industry P/E older than this is not today's sector rating. */
 export const MAX_INDUSTRY_AGE_DAYS = 14;
 
+/** Consensus EPS growth to the horizon above which the exit cannot exceed today's multiple. */
+export const FAST_GROWTH = 0.15;
+
 /** Years of own history needed before its high caps the exit multiple. */
 export const MIN_HISTORY_FOR_CAP = 3;
 
@@ -81,8 +84,14 @@ export interface HouseResult {
   exitPeSource: string | null;
   /** The exit multiple the anchors (and cap) give, before any manual override. */
   modelExitPe: number | null;
-  /** Set when the anchors exceeded the company's own highest P/E and were capped to it. */
+  /** Set when the exit was capped: at the company's own highest P/E, or at today's multiple for a fast grower. */
   exitCapNote: string | null;
+  /** The fast-grower cap bound: the exit is today's multiple of current-year consensus. */
+  growthCapped: boolean;
+  /** Consensus EPS growth a year from the current year to the horizon. */
+  epsGrowthToHorizon: number | null;
+  /** The exit and return the fast-grower cap replaced. */
+  beforeGrowthCap: { exitPe: number; totalCagr: number } | null;
   peBasis: 'adjusted' | 'gaap';
   basis: BasisComparison;
   sustainableGrowth: number;
@@ -277,27 +286,74 @@ export function houseReturn(input: HouseInputs): HouseResult {
   // on re-ratings toward US peers. Without an override, the exit multiple
   // stops at the highest P/E the company has actually carried.
   const ownMax = ownHistory.length >= MIN_HISTORY_FOR_CAP ? Math.max(...ownHistory) : null;
-  const capBinds = ownMax !== null && anchors.recommended !== null && anchors.recommended > ownMax;
-  // What the model would use; an override replaces it but it is still reported.
-  const modelExitPe = (capBinds ? ownMax : anchors.recommended) ?? null;
-  const capped = input.exitPeOverride === undefined && capBinds;
+
+  /*
+   * No multiple expansion for fast growers. Nu, Toast and Q2 turned
+   * profitable recently, so their own-history P/Es come from years of tiny
+   * earnings: exits of 27x, 41x and 63x against 14x, 22x and 19x on this
+   * year's consensus today. A company growing fast now is growing slower at the
+   * horizon, and its multiple compresses rather than doubles. Where consensus
+   * EPS compounds faster than 15% a year to the horizon, the exit stops at
+   * today's multiple of current-year consensus, and even that is generous.
+   */
+  const current = input.forward[0];
+  const yearsToCurrent = current
+    ? (Date.parse(`${current.date.slice(0, 10)}T00:00:00Z`) - today.getTime()) / 86_400_000 / 365.25
+    : null;
+  const epsGrowthToHorizon =
+    current && horizon && yearsToCurrent !== null && horizon.years - yearsToCurrent >= 0.8 && current.epsAvg > 0 && horizon.estimate.epsAvg > 0
+      ? Math.pow(horizon.estimate.epsAvg / current.epsAvg, 1 / (horizon.years - yearsToCurrent)) - 1
+      : null;
+  const todaysPe = current && current.epsAvg > 0 ? input.price / (current.epsAvg * input.fxRate) : null;
+  const growthCap =
+    epsGrowthToHorizon !== null && epsGrowthToHorizon > FAST_GROWTH && todaysPe !== null ? todaysPe : null;
+
+  // What the model would use: the anchors, then whichever cap binds lower.
+  let modelExitPe = anchors.recommended ?? null;
+  let capNote: string | null = null;
+  let capSource: string | null = null;
+  if (modelExitPe !== null && ownMax !== null && modelExitPe > ownMax) {
+    capNote = `Exit multiple capped at ${ownMax.toFixed(1)}x, the highest P/E it has traded at in the ${ownHistory.length} years used. The anchors' ${modelExitPe.toFixed(1)}x would assume a re-rating it has never had.`;
+    capSource = "the company's own highest historical P/E (capped)";
+    modelExitPe = ownMax;
+  }
+  const exitBeforeGrowthCap = modelExitPe;
+  if (modelExitPe !== null && growthCap !== null && modelExitPe > growthCap) {
+    capNote = `Exit capped at today's ${growthCap.toFixed(1)}x (price over FY${fiscalYearOf(current!.date)} consensus). With EPS compounding ${(
+      epsGrowthToHorizon! * 100
+    ).toFixed(0)}% a year, the model's ${modelExitPe.toFixed(1)}x would assume a fast grower re-rates upward as its growth slows. Multiples usually compress instead, so treat this return as an upper bound.`;
+    capSource = "today's multiple of current-year consensus (fast-grower cap)";
+    modelExitPe = growthCap;
+  }
+  const capped = input.exitPeOverride === undefined && capNote !== null;
   const exitPe = input.exitPeOverride ?? modelExitPe;
   const exitPeSource =
     input.exitPeOverride !== undefined
       ? `your own exit multiple${modelExitPe !== null ? ` (the model's is ${modelExitPe.toFixed(1)}x)` : ''}`
       : capped
-        ? "the company's own highest historical P/E (capped)"
+        ? capSource
         : anchors.recommendedSource;
-  const exitCapNote =
-    capped && ownMax !== null && anchors.recommended !== null
-      ? `Exit multiple capped at ${ownMax.toFixed(1)}x, the highest P/E it has traded at in the ${ownHistory.length} years used. The anchors' ${anchors.recommended.toFixed(1)}x would assume a re-rating it has never had.`
-      : null;
+  const exitCapNote = capped ? capNote : null;
+  const growthCapped = capped && capSource?.includes('fast-grower') === true;
   const years = horizon?.years ?? input.horizonYears;
 
   const expected =
     exitPe !== null && epsAtHorizon !== null
       ? expectedReturn({ price: input.price, epsAtHorizon, exitMultiple: exitPe, dividendYield: input.dividendYield, years })
       : null;
+  // What the cap changed, for reviewing it across the whole screen.
+  const uncapped =
+    growthCapped && exitBeforeGrowthCap !== null && epsAtHorizon !== null
+      ? expectedReturn({
+          price: input.price,
+          epsAtHorizon,
+          exitMultiple: exitBeforeGrowthCap,
+          dividendYield: input.dividendYield,
+          years,
+        })
+      : null;
+  const beforeGrowthCap =
+    uncapped && exitBeforeGrowthCap !== null ? { exitPe: exitBeforeGrowthCap, totalCagr: uncapped.totalCagr } : null;
   const required =
     epsAtHorizon !== null ? requiredExitMultiple(input.price, epsAtHorizon, input.hurdle, input.dividendYield, years) : null;
   const scenarios =
@@ -329,6 +385,9 @@ export function houseReturn(input: HouseInputs): HouseResult {
     exitPeSource,
     modelExitPe,
     exitCapNote,
+    growthCapped,
+    epsGrowthToHorizon,
+    beforeGrowthCap,
     peBasis,
     basis,
     sustainableGrowth,

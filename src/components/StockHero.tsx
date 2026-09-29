@@ -23,6 +23,7 @@ export function StockHero({
   requiredExitMultiple,
   totalReturn,
   userExitPe,
+  upperBound,
 }: {
   symbol: string;
   companyName: string;
@@ -44,6 +45,8 @@ export function StockHero({
   totalReturn?: number | null;
   /** Set when the return uses your own exit multiple rather than the model's. */
   userExitPe?: number | null;
+  /** Fast grower capped at today's multiple: the return is a ceiling, not an estimate. */
+  upperBound?: boolean;
 }) {
   const sym = symbol.toUpperCase();
   const sleeve =
@@ -110,6 +113,7 @@ export function StockHero({
               ? ` · ${signedPct(totalReturn)} in total`
               : ''}
             {userExitPe ? ` · at your ${multiple(userExitPe, 1)}×` : ''}
+            {upperBound && !userExitPe ? ' · upper bound' : ''}
           </span>
         </div>
         <div className="hero-stat">
