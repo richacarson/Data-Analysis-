@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { Session } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import type { WatchlistItemRow } from '@/lib/supabase/types';
@@ -34,6 +35,8 @@ function writeLocal(symbols: string[]) {
 
 export function Watchlist() {
   const [supabase] = useState(() => createClient());
+  // The home page's Watchlist card is server-rendered; refresh it after a save.
+  const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [symbols, setSymbols] = useState<string[]>([]);
   const [input, setInput] = useState('');
@@ -111,6 +114,8 @@ export function Watchlist() {
         // Roll the optimistic update back so the UI never claims a save that failed.
         setSymbols(symbols);
         setStatus(error.message);
+      } else {
+        router.refresh();
       }
     } else {
       writeLocal(next);
@@ -122,6 +127,7 @@ export function Watchlist() {
     setSymbols(next);
     if (supabase && session) {
       await supabase.from('eq_watchlist_items').delete().eq('symbol', symbol);
+      router.refresh();
     } else {
       writeLocal(next);
     }

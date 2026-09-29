@@ -2,13 +2,15 @@ import Link from 'next/link';
 import { Watchlist } from '@/components/Watchlist';
 import { HoldingsBrowser } from '@/components/HoldingsBrowser';
 import { SLEEVES, ALL_SLEEVE_TICKERS } from '@/data/sleeves';
+import { getWatchlistSymbols } from '@/lib/watchlist';
 
 /**
  * 4a Hairline home: a page title, then one rule-topped figure per sleeve
  * (the screen of everything leads, under the gold rule), then holdings and
  * the watchlist as plain ruled lists — no boxed panels.
  */
-export default function HomePage() {
+export default async function HomePage() {
+  const watchlist = await getWatchlistSymbols();
   return (
     <div className="space-y-12 sm:space-y-14">
       <div className="flex flex-col gap-2">
@@ -18,7 +20,7 @@ export default function HomePage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-6 gap-y-8 md:grid-cols-5 md:gap-10">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-8 md:grid-cols-6 md:gap-10">
         <Link href="/screen" className="hero-stat hero-stat-lead group col-span-2 md:col-span-1">
           <span className="hero-label">Screen</span>
           <span className="hero-value">{ALL_SLEEVE_TICKERS.length}</span>
@@ -31,13 +33,23 @@ export default function HomePage() {
             <span className="hero-sub group-hover:text-goldInk">Screen {s.name} →</span>
           </Link>
         ))}
+        <Link
+          href={watchlist.length ? '/screen?sleeve=watchlist' : '#watchlist'}
+          className="hero-stat group col-span-2 md:col-span-1"
+        >
+          <span className="hero-label">Watchlist</span>
+          <span className="hero-value">{watchlist.length}</span>
+          <span className="hero-sub group-hover:text-goldInk">
+            {watchlist.length ? 'Screen Watchlist →' : 'Add tickers below ↓'}
+          </span>
+        </Link>
       </div>
 
       <div className="grid gap-12 lg:grid-cols-3 lg:gap-10">
         <div className="lg:col-span-2">
           <HoldingsBrowser sleeves={SLEEVES} />
         </div>
-        <div className="lg:col-span-1">
+        <div id="watchlist" className="lg:col-span-1">
           <Watchlist />
         </div>
       </div>

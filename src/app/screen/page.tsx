@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { runScreen } from '@/lib/screen/run';
 import { SLEEVES, sleeveByKey, ALL_SLEEVE_TICKERS } from '@/data/sleeves';
 import { DEFAULT_HURDLE } from '@/lib/valuation/build';
+import { getWatchlistSymbols } from '@/lib/watchlist';
 import { Panel, Stat } from '@/components/ui';
 import { ScreenTable } from '@/components/ScreenTable';
 
@@ -23,8 +24,10 @@ export default async function ScreenPage({
   searchParams: Promise<{ sleeve?: string; hurdle?: string }>;
 }) {
   const { sleeve: sleeveKey, hurdle: hurdleParam } = await searchParams;
-  const sleeve = sleeveKey ? sleeveByKey(sleeveKey) : undefined;
-  const tickers = sleeve ? sleeve.tickers : ALL_SLEEVE_TICKERS;
+  const watchlist = await getWatchlistSymbols();
+  const onWatchlist = sleeveKey === 'watchlist';
+  const sleeve = sleeveKey && !onWatchlist ? sleeveByKey(sleeveKey) : undefined;
+  const tickers = onWatchlist ? watchlist : sleeve ? sleeve.tickers : ALL_SLEEVE_TICKERS;
 
   const parsedHurdle = hurdleParam ? Number(hurdleParam) : NaN;
   const hurdle = Number.isFinite(parsedHurdle) && parsedHurdle > 0 ? parsedHurdle : DEFAULT_HURDLE;
@@ -55,13 +58,13 @@ export default async function ScreenPage({
       <div className="panel px-4 py-4 sm:px-5">
         <p className="eyebrow">Portfolio screen</p>
         <h1 className="mt-1.5 font-serif text-[24px] tracking-tight text-t1">
-          {sleeve ? sleeve.name : 'All sleeves'}
+          {onWatchlist ? 'Watchlist' : sleeve ? sleeve.name : 'All sleeves'}
         </h1>
         <div className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-0.5 sm:mx-0 sm:flex-wrap sm:px-0">
           <Link
             href="/screen"
             className={`shrink-0 border px-3 py-1.5 text-[12px] font-medium ${
-              !sleeve ? 'border-lineActive text-gold' : 'border-line bg-card text-t2 hover:text-gold'
+              !sleeve && !onWatchlist ? 'border-lineActive text-gold' : 'border-line bg-card text-t2 hover:text-gold'
             }`}
           >
             All ({ALL_SLEEVE_TICKERS.length})
@@ -79,11 +82,21 @@ export default async function ScreenPage({
               {s.name} ({s.tickers.length})
             </Link>
           ))}
+          {watchlist.length > 0 && (
+            <Link
+              href="/screen?sleeve=watchlist"
+              className={`shrink-0 border px-3 py-1.5 text-[12px] font-medium ${
+                onWatchlist ? 'border-lineActive text-gold' : 'border-line bg-card text-t2 hover:text-gold'
+              }`}
+            >
+              Watchlist ({watchlist.length})
+            </Link>
+          )}
         </div>
       </div>
 
       <div className="panel stat-grid md:grid-cols-4">
-        <Stat label="Holdings screened" value={String(tickers.length)} sub={`${scored.length} with usable estimates`} />
+        <Stat label={onWatchlist ? 'Names screened' : 'Holdings screened'} value={String(tickers.length)} sub={`${scored.length} with usable estimates`} />
         <Stat
           label={`Clear ${(hurdle * 100).toFixed(0)}%`}
           value={String(clearing.length)}
