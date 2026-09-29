@@ -159,4 +159,17 @@ describe('houseReturn', () => {
     expect(r.horizonExtended!.growth).toBe(0.25);
     expect(r.horizonExtended!.capped).toBe(true);
   });
+
+  it('carries the last published year forward when nothing reaches the horizon (JPM)', () => {
+    const forward = [
+      { date: '2026-12-31', epsAvg: 20, epsLow: 19, epsHigh: 21, numAnalystsEps: 18 },
+      { date: '2027-12-31', epsAvg: 21, epsLow: 20, epsHigh: 22, numAnalystsEps: 16 },
+      { date: '2028-12-31', epsAvg: 22.05, epsLow: 21, epsHigh: 23, numAnalystsEps: 8 },
+    ];
+    const r = houseReturn(base({ forward }));
+    expect(r.horizon!.estimate.date).toBe('2029-12-31');
+    expect(r.horizon!.years).toBeGreaterThan(3);
+    expect(r.horizonExtended!.fromFiscalYear).toBe('2028');
+    expect(r.horizonNote).toMatch(/published only to FY2028/);
+  });
 });
