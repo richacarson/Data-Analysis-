@@ -204,7 +204,7 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
                         </span>
                         {r.horizonNote && (
                           <span className="ml-1 text-[10px] text-warn" title={r.horizonNote}>
-                            ↓
+                            {r.horizonExtendedFrom ? `ext. FY${r.horizonExtendedFrom}` : '↓'}
                           </span>
                         )}
                         {r.convertedFrom && (

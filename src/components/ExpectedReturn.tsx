@@ -61,7 +61,11 @@ export function ExpectedReturnPanel({
     >
       {expected.horizonNote && (
         <div className="border-b border-line bg-warn/[0.08] px-4 py-3">
-          <Badge tone="flat">Horizon shortened for coverage</Badge>
+          <Badge tone="flat">
+            {expected.horizonExtended
+              ? `Extended from FY${expected.horizonExtended.fromFiscalYear} consensus`
+              : 'Horizon shortened for coverage'}
+          </Badge>
           <p className="mt-2 text-[12px] leading-relaxed text-t3">{expected.horizonNote}</p>
         </div>
       )}

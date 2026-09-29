@@ -109,8 +109,6 @@ export function pickHorizon<T extends { date: string }>(
 
 /** Estimates need this many analysts before they anchor a horizon. */
 export const MIN_ANALYSTS = 3;
-/** ...and at least this share of the company's best-covered forecast year. */
-export const MIN_COVERAGE_SHARE = 0.3;
 
 export interface CoveredHorizon<T> extends HorizonChoice<T> {
   /** Set when the year nearest the horizon was too thinly covered to use. */
@@ -121,13 +119,14 @@ export interface CoveredHorizon<T> extends HorizonChoice<T> {
  * The horizon year, restricted to estimates with real coverage.
  *
  * FMP's furthest years often rest on one or two analysts and do not hang
- * together: Keysight's FY2029 was a single analyst at $11.18 (below its own
- * FY2028), Fortinet's FY2029 sat below FY2028 on 5 analysts against 25 for
- * FY2027. Where coverage is solid FMP agrees with other sources — Freeport's
- * FY2028 is $4.46 on 10 analysts against Seeking Alpha's $4.49. So a year
- * counts only with at least three analysts and at least 30% of the
- * best-covered year; otherwise the horizon steps back to the furthest year
- * that does, and the return is measured over that shorter holding period.
+ * together: Keysight's FY2029 was a single analyst at $11.18, below its own
+ * FY2028. So a year counts only with at least three analysts; otherwise the
+ * horizon steps back to the furthest year that has them, and the caller
+ * extends that year's consensus out to the horizon (see houseReturn).
+ *
+ * An earlier rule also required 30% of the best-covered year's analysts. It
+ * shortened 62 of 192 stocks whose third year had three or more analysts, and
+ * left the screen's CAGRs spanning anywhere from 1.3 to 3.3 years.
  */
 export function pickCoveredHorizon<T extends { date: string; numAnalystsEps?: number }>(
   forward: T[],
@@ -136,11 +135,7 @@ export function pickCoveredHorizon<T extends { date: string; numAnalystsEps?: nu
 ): CoveredHorizon<T> | null {
   const nominal = pickHorizon(forward, horizonYears, today);
   if (!nominal) return null;
-  const peak = Math.max(0, ...forward.map((e) => e.numAnalystsEps ?? 0));
-  const covered = forward.filter((e) => {
-    const n = e.numAnalystsEps ?? 0;
-    return n >= MIN_ANALYSTS && n >= peak * MIN_COVERAGE_SHARE;
-  });
+  const covered = forward.filter((e) => (e.numAnalystsEps ?? 0) >= MIN_ANALYSTS);
   const choice = pickHorizon(covered, horizonYears, today);
   if (!choice) return { ...nominal, skipped: null };
   const skipped =

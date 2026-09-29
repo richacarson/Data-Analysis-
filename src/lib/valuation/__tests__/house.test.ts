@@ -129,4 +129,34 @@ describe('houseReturn', () => {
     const industrial = houseReturn(base({ sector: 'Industrials', industry: 'Tools' }));
     expect(industrial.anchors.anchors.find((a) => a.label.startsWith('Justified'))?.excluded).toBeFalsy();
   });
+
+  it('extends the last well-covered year to a thin horizon year at consensus growth (ASO)', () => {
+    const forward = [
+      { date: '2027-01-31', epsAvg: 6.0, epsLow: 5.5, epsHigh: 6.5, numAnalystsEps: 11 },
+      { date: '2028-01-31', epsAvg: 6.6, epsLow: 6.0, epsHigh: 7.2, numAnalystsEps: 9 },
+      { date: '2029-01-31', epsAvg: 7.0, epsLow: 7.0, epsHigh: 7.0, numAnalystsEps: 1 },
+      { date: '2030-01-31', epsAvg: 9.0, epsLow: 9.0, epsHigh: 9.0, numAnalystsEps: 1 },
+    ];
+    const r = houseReturn(base({ forward }));
+    // Target is the year ending nearest three years out: January 2030.
+    expect(r.horizon!.estimate.date).toBe('2030-01-31');
+    expect(r.horizon!.years).toBeGreaterThan(3);
+    expect(r.horizonExtended!.fromFiscalYear).toBe('2027');
+    // 10% a year from FY(Jan 2027) to FY(Jan 2028), carried two more years.
+    expect(r.horizonExtended!.growth).toBeCloseTo(0.1, 2);
+    expect(r.epsAtHorizon!).toBeCloseTo(6.6 * Math.pow(1.1, 2), 1);
+    expect(r.horizon!.estimate.numAnalystsEps).toBe(9);
+    expect(r.horizonNote).toMatch(/extended 2\.0 years at 10\.0% a year/);
+  });
+
+  it('caps the growth used to extend', () => {
+    const forward = [
+      { date: '2026-12-31', epsAvg: 1.0, epsLow: 1, epsHigh: 1, numAnalystsEps: 8 },
+      { date: '2027-12-31', epsAvg: 2.0, epsLow: 2, epsHigh: 2, numAnalystsEps: 6 },
+      { date: '2029-12-31', epsAvg: 9.0, epsLow: 9, epsHigh: 9, numAnalystsEps: 1 },
+    ];
+    const r = houseReturn(base({ forward }));
+    expect(r.horizonExtended!.growth).toBe(0.25);
+    expect(r.horizonExtended!.capped).toBe(true);
+  });
 });

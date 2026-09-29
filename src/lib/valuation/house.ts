@@ -72,6 +72,8 @@ export interface HouseInputs {
 export interface HouseResult {
   horizon: { estimate: HouseEstimate; years: number; fiscalYear: string } | null;
   horizonNote: string | null;
+  /** Set when a thin horizon year was replaced by extending the furthest well-covered year. */
+  horizonExtended: { fromFiscalYear: string; growth: number; capped: boolean; years: number } | null;
   /** Consensus at the horizon, in the quote currency. */
   epsAtHorizon: number | null;
   anchors: ExitMultipleAnchors;
@@ -92,17 +94,84 @@ export interface HouseResult {
   review: string | null;
 }
 
+/** Growth used to extend consensus past its last well-covered year, bounded both ways. */
+export const MAX_EXTENSION_GROWTH = 0.25;
+export const MIN_EXTENSION_GROWTH = -0.1;
+
+/**
+ * The company's consensus growth rate, to carry its last well-covered year out
+ * to the horizon: from the first forecast year to that year where they are at
+ * least ten months apart, otherwise across every published year.
+ */
+export function extensionGrowth(
+  forward: HouseEstimate[],
+  covered: HouseEstimate,
+  today: Date,
+): { rate: number; capped: boolean } | null {
+  const yearsTo = (e: HouseEstimate) =>
+    (Date.parse(`${e.date.slice(0, 10)}T00:00:00Z`) - today.getTime()) / 86_400_000 / 365.25;
+  const first = forward[0];
+  const last = forward[forward.length - 1];
+  const pairs: Array<[HouseEstimate, HouseEstimate]> = [];
+  if (first && first !== covered) pairs.push([first, covered]);
+  if (first && last && last !== first) pairs.push([first, last]);
+  for (const [a, b] of pairs) {
+    const span = yearsTo(b) - yearsTo(a);
+    if (span < 0.8 || !(a.epsAvg > 0) || !(b.epsAvg > 0)) continue;
+    const raw = Math.pow(b.epsAvg / a.epsAvg, 1 / span) - 1;
+    const rate = Math.min(MAX_EXTENSION_GROWTH, Math.max(MIN_EXTENSION_GROWTH, raw));
+    return { rate, capped: rate !== raw };
+  }
+  return null;
+}
+
 export function houseReturn(input: HouseInputs): HouseResult {
   const today = input.today ?? new Date();
   const fiscalYearEnds = input.annual.map((r) => ({ date: r.date, fiscalYear: r.fiscalYear }));
   const fiscalYearOf = fiscalYearLabeler(fiscalYearEnds);
 
   // ---- Horizon: the well-covered year nearest the target -----------------
+  /*
+   * Where the year nearest the target is too thinly covered, the furthest
+   * well-covered year is extended out to it at the company's own consensus
+   * growth, so every return spans roughly the same holding period. Shortening
+   * the horizon instead left a third of the screen annualized over 1.3 or 2
+   * years, and a short period magnifies any gap to the price.
+   */
   const chosen = pickCoveredHorizon(input.forward, input.horizonYears, today);
-  const horizon = chosen ? { estimate: chosen.estimate, years: chosen.years, fiscalYear: fiscalYearOf(chosen.estimate.date) } : null;
-  const horizonNote = chosen?.skipped
-    ? `FY${fiscalYearOf(chosen.skipped.estimate.date)} rests on ${chosen.skipped.analysts} analyst${chosen.skipped.analysts === 1 ? '' : 's'}, too thin to anchor on, so the horizon is FY${horizon?.fiscalYear}.`
-    : null;
+  let horizon = chosen ? { estimate: chosen.estimate, years: chosen.years, fiscalYear: fiscalYearOf(chosen.estimate.date) } : null;
+  let horizonNote: string | null = null;
+  let horizonExtended: HouseResult['horizonExtended'] = null;
+  if (chosen?.skipped && horizon) {
+    const target = chosen.skipped.estimate;
+    const targetYears = (Date.parse(`${target.date.slice(0, 10)}T00:00:00Z`) - today.getTime()) / 86_400_000 / 365.25;
+    const growth = extensionGrowth(input.forward, chosen.estimate, today);
+    const span = targetYears - chosen.years;
+    const thin = `FY${fiscalYearOf(target.date)} rests on ${chosen.skipped.analysts} analyst${chosen.skipped.analysts === 1 ? '' : 's'}, too thin to anchor on`;
+    if (growth !== null && span > 0 && chosen.estimate.epsAvg > 0) {
+      const factor = Math.pow(1 + growth.rate, span);
+      const from = horizon.fiscalYear;
+      horizon = {
+        estimate: {
+          ...chosen.estimate,
+          date: target.date,
+          epsAvg: chosen.estimate.epsAvg * factor,
+          epsLow: chosen.estimate.epsLow * factor,
+          epsHigh: chosen.estimate.epsHigh * factor,
+        },
+        years: targetYears,
+        fiscalYear: fiscalYearOf(target.date),
+      };
+      horizonExtended = { fromFiscalYear: from, growth: growth.rate, capped: growth.capped, years: span };
+      horizonNote = `${thin}, so FY${from}'s consensus of ${(chosen.estimate.epsAvg * input.fxRate).toFixed(2)} (${
+        chosen.estimate.numAnalystsEps
+      } analysts) is extended ${span.toFixed(1)} years at ${(growth.rate * 100).toFixed(1)}% a year, its consensus growth rate${
+        growth.capped ? ', capped' : ''
+      }.`;
+    } else {
+      horizonNote = `${thin}, so the horizon is FY${horizon.fiscalYear}.`;
+    }
+  }
   const epsAtHorizon = horizon && horizon.estimate.epsAvg > 0 ? horizon.estimate.epsAvg * input.fxRate : null;
 
   // ---- Own history, on the basis consensus is quoted on -------------------
@@ -238,6 +307,7 @@ export function houseReturn(input: HouseInputs): HouseResult {
   return {
     horizon,
     horizonNote,
+    horizonExtended,
     epsAtHorizon,
     anchors,
     exitPe,

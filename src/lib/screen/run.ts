@@ -40,6 +40,8 @@ export interface ScreenRow {
   anchorsDisagree: boolean;
   /** Why the horizon is shorter than asked: the nearer year lacked coverage. */
   horizonNote?: string;
+  /** The horizon year's EPS was extended from an earlier, better-covered year. */
+  horizonExtendedFrom?: string;
   /** Exit multiple capped at the company's own highest historical P/E. */
   exitCapNote?: string;
   /** Held out of the ranking: the output is implausible and needs a look. */
@@ -191,6 +193,7 @@ export async function runScreen(
         ownMedianPe: house.anchors.anchors.find((a) => a.label === 'Own 10-year median')?.value ?? null,
         anchorsDisagree: house.anchors.anchorsDisagree,
         horizonNote: house.horizonNote ?? undefined,
+        horizonExtendedFrom: house.horizonExtended?.fromFiscalYear,
         exitCapNote: house.exitCapNote ?? undefined,
         convertedFrom: reported !== quote ? reported : undefined,
       };

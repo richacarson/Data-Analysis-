@@ -688,6 +688,7 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
       horizonYears,
       yearsToHorizon,
       horizonNote: house.horizonNote,
+      horizonExtended: house.horizonExtended,
       /** Period end of the horizon year, so a non-December year can say when it ends. */
       horizonDate: house.horizon?.estimate.date ?? null,
       listingIssue: listing,

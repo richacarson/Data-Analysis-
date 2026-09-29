@@ -20,14 +20,16 @@ describe('pickCoveredHorizon', () => {
     expect(h.years).toBeCloseTo(1.1, 1);
   });
 
-  it('drops a year covered by a sliver of the analysts following nearer years', () => {
+  it('keeps a year with three or more analysts, however many follow nearer years', () => {
     // Freeport: FY2029 has 4 analysts against 14 for FY2027.
     const fcx = [
       { date: '2027-12-31', epsAvg: 4.0, numAnalystsEps: 14 },
       { date: '2028-12-31', epsAvg: 4.46, numAnalystsEps: 10 },
       { date: '2029-12-31', epsAvg: 4.7, numAnalystsEps: 4 },
     ];
-    expect(pickCoveredHorizon(fcx, 3, today)!.estimate.epsAvg).toBe(4.46);
+    const h = pickCoveredHorizon(fcx, 3, today)!;
+    expect(h.estimate.epsAvg).toBe(4.7);
+    expect(h.skipped).toBeNull();
   });
 
   it('keeps the nominal year when it is well covered', () => {
