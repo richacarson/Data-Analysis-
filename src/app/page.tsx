@@ -3,44 +3,42 @@ import { Watchlist } from '@/components/Watchlist';
 import { HoldingsBrowser } from '@/components/HoldingsBrowser';
 import { SLEEVES, ALL_SLEEVE_TICKERS } from '@/data/sleeves';
 
+/**
+ * 4a Hairline home: a page title, then one rule-topped figure per sleeve
+ * (the screen of everything leads, under the gold rule), then holdings and
+ * the watchlist as plain ruled lists — no boxed panels.
+ */
 export default function HomePage() {
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
-        <Link
-          href="/screen"
-          className="panel col-span-2 flex flex-col justify-between px-4 py-4 transition-colors hover:border-lineActive lg:col-span-1"
-        >
-          <p className="eyebrow">Screen</p>
-          <div className="mt-3">
-            <p className="font-serif text-[20px] leading-tight text-t1">All sleeves</p>
-            <p className="mt-1 text-[12px] text-t4">
-              {ALL_SLEEVE_TICKERS.length} holdings by expected 3-year return
-            </p>
-          </div>
-        </Link>
+    <div className="space-y-12 sm:space-y-14">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-[40px] font-bold leading-none tracking-[-0.03em] text-t1 sm:text-[48px]">Sleeves</h1>
+        <p className="text-[16px] text-t3 sm:text-[18px]">
+          {ALL_SLEEVE_TICKERS.length} holdings across {SLEEVES.length} sleeves
+        </p>
+      </div>
 
+      <div className="grid grid-cols-2 gap-x-6 gap-y-8 md:grid-cols-5 md:gap-10">
+        <Link href="/screen" className="hero-stat hero-stat-lead group col-span-2 md:col-span-1">
+          <span className="hero-label">Screen</span>
+          <span className="hero-value">{ALL_SLEEVE_TICKERS.length}</span>
+          <span className="hero-sub group-hover:text-goldInk">All sleeves by expected return →</span>
+        </Link>
         {SLEEVES.map((s) => (
-          <Link
-            key={s.key}
-            href={`/screen?sleeve=${s.key}`}
-            className="panel flex flex-col justify-between px-4 py-4 transition-colors hover:border-lineActive"
-          >
-            <p className="eyebrow-muted">Sleeve</p>
-            <div className="mt-3">
-              <p className="font-serif text-[18px] leading-tight text-t1 sm:text-[20px]">{s.name}</p>
-              <p className="mt-1 text-[12px] text-t4">{s.tickers.length} holdings</p>
-            </div>
+          <Link key={s.key} href={`/screen?sleeve=${s.key}`} className="hero-stat group">
+            <span className="hero-label">{s.name}</span>
+            <span className="hero-value">{s.tickers.length}</span>
+            <span className="hero-sub group-hover:text-goldInk">Screen {s.name} →</span>
           </Link>
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-1">
-          <Watchlist />
-        </div>
+      <div className="grid gap-12 lg:grid-cols-3 lg:gap-10">
         <div className="lg:col-span-2">
           <HoldingsBrowser sleeves={SLEEVES} />
+        </div>
+        <div className="lg:col-span-1">
+          <Watchlist />
         </div>
       </div>
     </div>

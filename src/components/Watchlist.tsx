@@ -5,7 +5,6 @@ import Link from 'next/link';
 import type { Session } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import type { WatchlistItemRow } from '@/lib/supabase/types';
-import { Panel } from './ui';
 
 /**
  * Watchlist backed by Supabase when a user is signed in.
@@ -131,41 +130,40 @@ export function Watchlist() {
   const subtitle = session ? 'Synced to your account' : 'Stored in this browser';
 
   return (
-    <Panel title="Watchlist" subtitle={subtitle}>
-      <div className="flex items-stretch gap-2 border-b border-line px-4 py-3">
+    <section>
+      <div className="flex items-end justify-between gap-4 border-b border-line pb-3">
+        <h2 className="text-[14px] font-medium text-t1">Watchlist</h2>
+        <span className="text-[12px] text-t3">{subtitle}</span>
+      </div>
+      <div className="flex items-end gap-4 border-b border-hairline py-3">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && add(input)}
           placeholder="Add ticker…"
           aria-label="Add a ticker to your watchlist"
-          className="field min-w-0 flex-1 py-1.5 sm:w-40 sm:flex-none"
+          className="min-w-0 flex-1 border-0 border-b border-rule/60 bg-transparent px-0 py-1.5 text-[16px] uppercase text-t1 outline-none placeholder:normal-case placeholder:text-t3 focus:border-rule sm:text-[14px]"
         />
-        <button
-          onClick={() => add(input)}
-          className="border border-line bg-card px-3 py-1.5 text-[13px] font-medium hover:border-lineActive hover:text-gold"
-        >
+        <button onClick={() => add(input)} className="pb-1.5 text-[14px] font-medium text-t1 hover:text-goldInk">
           Add
         </button>
       </div>
 
       {loading ? (
-        <p className="px-4 py-4 text-[13px] text-t3">Loading…</p>
+        <p className="py-4 text-[13px] text-t3">Loading…</p>
       ) : symbols.length === 0 ? (
-        <p className="px-4 py-4 text-[13px] text-t3">
-          No tickers yet. Add one above to track it here.
-        </p>
+        <p className="py-4 text-[14px] leading-relaxed text-t3">No tickers yet. Add one above to track it here.</p>
       ) : (
-        <ul className="flex flex-wrap gap-2 px-4 py-3">
+        <ul>
           {symbols.map((symbol) => (
-            <li key={symbol} className="flex items-center gap-1.5 border border-line bg-card pl-3 pr-1.5 py-1">
-              <Link href={`/stock/${symbol}`} className="text-[13px] font-medium hover:text-gold">
+            <li key={symbol} className="flex min-h-[44px] items-center justify-between border-b border-hairline">
+              <Link href={`/stock/${symbol}`} className="tabular text-[14px] font-medium text-t1 hover:text-goldInk">
                 {symbol}
               </Link>
               <button
                 onClick={() => remove(symbol)}
                 aria-label={`Remove ${symbol}`}
-                className="px-1 text-[13px] leading-none text-t3 hover:text-dn"
+                className="flex h-11 w-11 items-center justify-center text-[16px] leading-none text-t3 hover:text-dn"
               >
                 ×
               </button>
@@ -174,7 +172,7 @@ export function Watchlist() {
         </ul>
       )}
 
-      {status && <p className="px-4 pb-3 text-[12px] text-t3">{status}</p>}
-    </Panel>
+      {status && <p className="pt-3 text-[12px] text-t3">{status}</p>}
+    </section>
   );
 }

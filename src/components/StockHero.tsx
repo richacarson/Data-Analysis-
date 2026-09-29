@@ -20,7 +20,6 @@ export function StockHero({
   horizonYears,
   valueLow,
   valueHigh,
-  upside,
   requiredExitMultiple,
 }: {
   symbol: string;
@@ -36,7 +35,8 @@ export function StockHero({
   horizonYears: number;
   valueLow: number | null;
   valueHigh: number | null;
-  upside: number;
+  /** Kept for callers; the range note now reads price against low/high directly. */
+  upside?: number;
   requiredExitMultiple: number | null;
 }) {
   const sym = symbol.toUpperCase();
@@ -49,6 +49,18 @@ export function StockHero({
   const q = sleeve ? `?sleeve=${sleeve.key}` : '';
 
   const shortName = companyName.replace(/,?\s+(Inc\.?|Corp\.?|Corporation|Ltd\.?|plc|N\.V\.)$/i, '');
+  // Where the price sits against the modelled range. Inside it is neither cheap nor dear.
+  const valueNote =
+    valueLow === null || valueHigh === null
+      ? 'No growth model applies'
+      : price < valueLow
+        ? 'Below the range'
+        : price > valueHigh
+          ? 'Above the range'
+          : 'Inside the range';
+  const valueTone = valueNote === 'Below the range' ? 'text-up' : valueNote === 'Above the range' ? 'text-dn' : 'text-t1';
+  const horizon = Number.isInteger(horizonYears) ? `${horizonYears}Y` : `${horizonYears.toFixed(1)}-year`;
+
   const range =
     valueLow !== null && valueHigh !== null
       ? `${roundMoney(valueLow, currency).replace(/^\$/, '')}–${roundMoney(valueHigh, currency).replace(/^\$/, '')}`
@@ -82,7 +94,7 @@ export function StockHero({
 
       <div className="grid grid-cols-2 gap-x-6 gap-y-8 md:grid-cols-4 md:gap-10">
         <div className="hero-stat hero-stat-lead">
-          <span className="hero-label">Expected {horizonYears}Y return</span>
+          <span className="hero-label">Expected {horizon} return</span>
           <span className={`hero-value ${expectedCagr !== null ? toneClass(expectedCagr - hurdle) : ''}`}>
             {pct(expectedCagr)}
           </span>
@@ -99,13 +111,7 @@ export function StockHero({
         <div className="hero-stat">
           <span className="hero-label">Fair value</span>
           <span className="hero-value">{range}</span>
-          {valueLow === null ? (
-            <span className="hero-sub">No model applies</span>
-          ) : (
-            <span className={`hero-sub ${upside > 0 ? 'text-up' : 'text-dn'}`}>
-              {upside > 0 ? 'Below' : 'Above'} {valueLow === valueHigh ? 'the model' : 'both models'}
-            </span>
-          )}
+          <span className={`hero-sub ${valueTone}`}>{valueNote}</span>
         </div>
         <div className="hero-stat">
           <span className="hero-label">Must believe</span>
