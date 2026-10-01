@@ -48,6 +48,7 @@ import { fiscalYearLabeler, forwardEstimates, pickCoveredHorizon } from './fisca
 import { forwardDividend } from './dividends';
 import { houseReturn } from './house';
 import { peerPes } from './peers';
+import { marketLinks } from './market';
 import {
   adjustedPeHistory,
   annualAdjustedEps,
@@ -487,7 +488,10 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
 
 
   // The sector anchor: listed peers' P/Es, falling back to FMP's industry figure.
-  const peers = await optional('peer P/Es', peerPes(ticker), []);
+  const [peers, market] = await Promise.all([
+    optional('peer P/Es', peerPes(ticker), []),
+    optional('market correlation', marketLinks(ticker), { threeYear: null, oneYear: null }),
+  ]);
 
   // Industry P/E over the past year; the shared calculation reduces it.
   const industryRows = profile.industry
@@ -778,6 +782,9 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
       cashflow: cashflow.slice(0, 10),
       balance: balance.slice(0, 10),
     },
+
+    /** Correlation and beta to the S&P 500 from weekly returns. */
+    market,
 
     hasInterestExpense: (latestIncome?.interestExpense ?? 0) > 0,
     ratios,

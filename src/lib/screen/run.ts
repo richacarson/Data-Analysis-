@@ -16,6 +16,7 @@ import { forwardDividend } from '../valuation/dividends';
 import { forwardEstimates } from '../valuation/fiscal';
 import { houseReturn } from '../valuation/house';
 import { peerPes } from '../valuation/peers';
+import { marketLinks } from '../valuation/market';
 import { listingIssue } from '../valuation/applicability';
 import { DEFAULT_ERP, DEFAULT_HORIZON_YEARS, DEFAULT_HURDLE } from '../valuation/build';
 
@@ -44,6 +45,8 @@ export interface ScreenRow {
   horizonExtendedFrom?: string;
   /** Exit multiple capped at the company's own highest historical P/E. */
   exitCapNote?: string;
+  /** Correlation of weekly returns with the S&P 500 over three years. */
+  correlation?: number | null;
   /** Capped at today's multiple as a fast grower: the return is an upper bound. */
   growthCapped?: boolean;
   /** The exit and return before the fast-grower cap, for reviewing what it changed. */
@@ -185,6 +188,9 @@ export async function runScreen(
         }),
       });
 
+      // Diversification read, independent of the valuation.
+      const market = await marketLinks(symbol).catch(() => null);
+
       const common: ScreenRow = {
         ...base,
         price,
@@ -201,6 +207,7 @@ export async function runScreen(
         horizonExtendedFrom: house.horizonExtended?.fromFiscalYear,
         exitCapNote: house.exitCapNote ?? undefined,
         growthCapped: house.growthCapped,
+        correlation: market?.threeYear?.correlation ?? null,
         beforeGrowthCap: house.beforeGrowthCap,
         epsGrowthToHorizon: house.epsGrowthToHorizon,
         convertedFrom: reported !== quote ? reported : undefined,

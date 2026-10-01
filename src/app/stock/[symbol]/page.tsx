@@ -599,7 +599,23 @@ export default async function StockPage({
           title="Cost of capital">
           <Row label="Risk-free rate (10y)" value={pct(costOfCapital.riskFreeRate)} />
           <Row label="Equity risk premium" value={pct(costOfCapital.equityRiskPremium)} />
-          <Row label="Beta" value={num(profile.beta)} />
+          <Row label="Beta (FMP, used above)" value={num(profile.beta)} />
+          <Row
+            label="Correlation to S&P 500"
+            value={
+              report.market.threeYear || report.market.oneYear
+                ? `${report.market.threeYear ? num(report.market.threeYear.correlation) : '—'} · ${
+                    report.market.oneYear ? num(report.market.oneYear.correlation) : '—'
+                  }`
+                : '—'
+            }
+            hint="Weekly returns against SPY: three years · one year. 1 moves with the market, 0 moves independently of it"
+          />
+          <Row
+            label="Beta to S&P 500 (3y weekly)"
+            value={report.market.threeYear ? num(report.market.threeYear.beta) : '—'}
+            hint="How far it moves when the market moves 1%, from the same weekly returns"
+          />
           <Row label="Cost of equity (CAPM)" value={pct(costOfCapital.costOfEquity)} />
           <Row label="Pre-tax cost of debt" value={pct(costOfCapital.costOfDebtPreTax)} />
           <Row label="After-tax cost of debt" value={pct(costOfCapital.afterTaxCostOfDebt)} />

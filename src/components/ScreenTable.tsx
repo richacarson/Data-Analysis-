@@ -6,7 +6,7 @@ import type { ScreenRow } from '@/lib/screen/run';
 import { sleevesHolding } from '@/data/sleeves';
 import { money, multiple, num, pct, signedPct } from '@/lib/format';
 
-type SortKey = 'expectedCagr' | 'stretch' | 'symbol' | 'requiredExitPe' | 'dividendYield';
+type SortKey = 'expectedCagr' | 'stretch' | 'symbol' | 'requiredExitPe' | 'dividendYield' | 'correlation';
 
 const COLUMNS: Array<{ key: SortKey | null; label: string; numeric?: boolean }> = [
   { key: 'symbol', label: 'Ticker' },
@@ -17,6 +17,7 @@ const COLUMNS: Array<{ key: SortKey | null; label: string; numeric?: boolean }> 
   { key: 'requiredExitPe', label: 'Must believe', numeric: true },
   { key: 'stretch', label: 'Stretch', numeric: true },
   { key: 'dividendYield', label: 'Yield', numeric: true },
+  { key: 'correlation', label: 'Corr. S&P', numeric: true },
   { key: 'expectedCagr', label: 'Expected CAGR', numeric: true },
 ];
 
@@ -54,6 +55,7 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
     { key: 'stretch', label: 'Stretch' },
     { key: 'requiredExitPe', label: 'Must believe' },
     { key: 'dividendYield', label: 'Yield' },
+    { key: 'correlation', label: 'Correlation to S&P' },
     { key: 'symbol', label: 'Ticker' },
   ];
 
@@ -138,6 +140,9 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
                     </span>
                     <span>needs {multiple(r.requiredExitPe)}</span>
                     {r.dividendYield > 0 && <span>{pct(r.dividendYield)} yield</span>}
+                    {r.correlation !== null && r.correlation !== undefined && (
+                      <span>corr. {num(r.correlation)}</span>
+                    )}
                   </div>
                 ) : (
                   <p className="mt-1 text-[11px] text-t4">{r.note ?? 'Not scored'}</p>
@@ -250,6 +255,12 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
                   </td>
                   <td className="tabular px-3 py-2 text-right text-t3">
                     {r.dividendYield > 0 ? pct(r.dividendYield) : '—'}
+                  </td>
+                  <td
+                    className="tabular px-3 py-2 text-right text-t3"
+                    title="Correlation of weekly returns with the S&P 500 over three years"
+                  >
+                    {r.correlation !== null && r.correlation !== undefined ? num(r.correlation) : '—'}
                   </td>
                   <td
                     className={`tabular px-3 py-2 text-right font-semibold ${
