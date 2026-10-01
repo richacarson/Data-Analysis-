@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { after, NextResponse, type NextRequest } from 'next/server';
 import { ALL_SLEEVE_TICKERS } from '@/data/sleeves';
 import { runScreen } from '@/lib/screen/run';
 import { trackedSymbols } from '@/lib/estimates/store';
@@ -37,7 +37,24 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => a.symbol.localeCompare(b.symbol));
     return NextResponse.json({ symbols: rows.length, scored: rows.filter((r) => r.expectedCagr !== null).length, changed });
   }
+  // A cold run is more requests than one invocation's time allows (every
+  // holding's peers and three years of prices). What finished is cached, so a
+  // follow-up pass picks up where this one stopped.
+  const unfinished = rows.filter((r) => r.note?.startsWith('Still loading')).length;
+  const pass = Number(request.nextUrl.searchParams.get('pass') ?? '1');
+  if (unfinished > 0 && pass < 4) {
+    const next = new URL(request.nextUrl);
+    next.searchParams.set('pass', String(pass + 1));
+    // Only the hand-off is awaited: the next pass runs in its own invocation
+    // with its own time limit, so this one need not wait for it to finish.
+    after(() =>
+      fetch(next, { headers: { authorization: `Bearer ${secret}` }, signal: AbortSignal.timeout(10_000) }).catch(
+        () => undefined,
+      ),
+    );
+  }
   return NextResponse.json({
+    pass,
     symbols: rows.length,
     scored: rows.filter((r) => r.expectedCagr !== null).length,
     unfinished: rows.filter((r) => r.note?.startsWith('Still loading')).length,
