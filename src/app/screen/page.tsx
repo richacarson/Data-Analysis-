@@ -3,6 +3,7 @@ import { runScreen } from '@/lib/screen/run';
 import { SLEEVES, sleeveByKey, ALL_SLEEVE_TICKERS } from '@/data/sleeves';
 import { DEFAULT_HURDLE } from '@/lib/valuation/build';
 import { getWatchlistSymbols } from '@/lib/watchlist';
+import { sleeveMarketLink } from '@/lib/valuation/market';
 import { Panel, Stat } from '@/components/ui';
 import { ScreenTable } from '@/components/ScreenTable';
 
@@ -33,6 +34,12 @@ export default async function ScreenPage({
   const hurdle = Number.isFinite(parsedHurdle) && parsedHurdle > 0 ? parsedHurdle : DEFAULT_HURDLE;
 
   const rows = await runScreen(tickers, { hurdle });
+  // The same cached price histories the rows used, combined into one portfolio.
+  const portfolio = await sleeveMarketLink(tickers).catch(() => null);
+  const correlations = rows.map((r) => r.correlation).filter((c): c is number => typeof c === 'number');
+  const averageCorrelation = correlations.length
+    ? correlations.reduce((t, c) => t + c, 0) / correlations.length
+    : null;
 
   const scored = rows.filter((r) => r.expectedCagr !== null);
   // Implausible outputs (a currency mix-up, a broken feed) are kept out of
@@ -95,7 +102,7 @@ export default async function ScreenPage({
         </div>
       </div>
 
-      <div className="panel stat-grid md:grid-cols-4">
+      <div className="panel stat-grid md:grid-cols-5">
         <Stat label={onWatchlist ? 'Names screened' : 'Holdings screened'} value={String(tickers.length)} sub={`${scored.length} with usable estimates`} />
         <Stat
           label={`Clear ${(hurdle * 100).toFixed(0)}%`}
@@ -117,6 +124,17 @@ export default async function ScreenPage({
             median !== null
               ? `Equal-weighted across ${scored.length} scored · median ${(median * 100).toFixed(1)}%`
               : undefined
+          }
+        />
+        <Stat
+          label="Correlation to S&P 500"
+          value={averageCorrelation !== null ? averageCorrelation.toFixed(2) : '—'}
+          sub={
+            portfolio
+              ? `Average of ${correlations.length} · as one portfolio ${portfolio.correlation.toFixed(2)}, beta ${portfolio.beta.toFixed(2)}`
+              : correlations.length
+                ? `Average of ${correlations.length}, weekly returns over 3 years`
+                : undefined
           }
         />
         <Stat

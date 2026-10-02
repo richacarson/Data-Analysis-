@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { marketLink } from '../correlation';
+import { marketLink, portfolioLink } from '../correlation';
 
 /** Daily closes, Monday to Friday, from weekly returns. */
 function series(weekly: number[], start = '2023-01-02'): Array<{ date: string; price: number }> {
@@ -41,5 +41,20 @@ describe('marketLink', () => {
 
   it('needs half a year of overlapping weeks', () => {
     expect(marketLink(series(market.slice(0, 20)), series(market), 156)).toBeNull();
+  });
+});
+
+describe('portfolioLink', () => {
+  it('reads an equal-weighted sleeve as more correlated than its average holding', () => {
+    // Each holding is the market plus its own noise; the noise cancels in the portfolio.
+    const noise = (seed: number) => Array.from({ length: 160 }, (_, i) => Math.sin(i * (2.3 + seed) + seed) * 0.03);
+    const holdings = [0.4, 1.1, 1.7, 2.6].map((seed) => market.map((r, i) => r + noise(seed)[i]));
+    const m = series(market);
+    const single = holdings.map((h) => marketLink(series(h), m, 156)!.correlation);
+    const average = single.reduce((t, c) => t + c, 0) / single.length;
+    const sleeve = portfolioLink(holdings.map((h) => series(h)), m, 156)!;
+    expect(sleeve.holdings).toBe(4);
+    expect(sleeve.correlation).toBeGreaterThan(average);
+    expect(sleeve.beta).toBeCloseTo(1, 1);
   });
 });

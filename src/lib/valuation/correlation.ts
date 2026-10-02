@@ -58,6 +58,11 @@ export function marketLink(
     rs.push(Math.log(s.get(keys[i])! / s.get(keys[i - 1])!));
     rm.push(Math.log(m.get(keys[i])! / m.get(keys[i - 1])!));
   }
+  return linkFromReturns(rs, rm, weeks);
+}
+
+/** Correlation and beta from aligned return series, over the last `weeks`. */
+function linkFromReturns(rs: number[], rm: number[], weeks: number): MarketLink | null {
   const a = rs.slice(-weeks);
   const b = rm.slice(-weeks);
   if (a.length < MIN_WEEKS) return null;
@@ -74,4 +79,39 @@ export function marketLink(
   }
   if (!(va > 0) || !(vb > 0)) return null;
   return { correlation: cov / Math.sqrt(va * vb), beta: cov / vb, weeks: a.length };
+}
+
+/**
+ * The sleeve as one equal-weighted portfolio, rebalanced weekly. Its
+ * correlation is higher than the average holding's, because the holdings'
+ * own moves partly cancel and the market's do not; it is the figure that
+ * says how much the sleeve diversifies. A week counts when at least half the
+ * holdings traded through it.
+ */
+export function portfolioLink(
+  stocks: Array<Array<{ date: string; price: number }>>,
+  market: Array<{ date: string; price: number }>,
+  weeks: number,
+): (MarketLink & { holdings: number }) | null {
+  const m = weeklyCloses(market);
+  const series = stocks.map(weeklyCloses).filter((w) => w.size > 0);
+  if (!series.length) return null;
+  const keys = [...m.keys()].sort();
+  const rp: number[] = [];
+  const rm: number[] = [];
+  for (let i = 1; i < keys.length; i++) {
+    const [prev, cur] = [keys[i - 1], keys[i]];
+    if ((Date.parse(cur) - Date.parse(prev)) / 86_400_000 !== 7) continue;
+    const moves: number[] = [];
+    for (const w of series) {
+      const a = w.get(prev);
+      const b = w.get(cur);
+      if (a && b) moves.push(b / a - 1);
+    }
+    if (moves.length < series.length / 2) continue;
+    rp.push(Math.log(1 + moves.reduce((t, v) => t + v, 0) / moves.length));
+    rm.push(Math.log(m.get(cur)! / m.get(prev)!));
+  }
+  const link = linkFromReturns(rp, rm, weeks);
+  return link ? { ...link, holdings: series.length } : null;
 }
