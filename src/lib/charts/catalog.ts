@@ -44,6 +44,7 @@ export const CATEGORIES = [
   'Price & valuation',
   'Income',
   'Growth & margins',
+  'Backlog',
   'Cash flow',
   'Per share',
   'Capital return',
@@ -127,6 +128,15 @@ export const CHARTS: ChartDef[] = [
   // ---- Mix ----------------------------------------------------------------
   { id: 'productSegments', title: 'Revenue by segment', category: 'Mix', kind: 'segments', series: [], format: 'money', annualOnly: true, segmentSource: 'product' },
   { id: 'geoSegments', title: 'Revenue by geography', category: 'Mix', kind: 'segments', series: [], format: 'money', annualOnly: true, segmentSource: 'geographic' },
+
+  // ---- Backlog --------------------------------------------------------------
+  // Remaining performance obligations from SEC filings (US filers), plus
+  // deferred revenue from the balance sheet.
+  { id: 'backlog', title: 'Backlog', category: 'Backlog', kind: 'bar', series: [{ key: 'backlog', label: 'Backlog (RPO)' }], format: 'money', overlay: { key: 'backlogCoverage', label: 'Backlog / trailing revenue (years)', format: 'multiple' }, note: 'Remaining performance obligations from SEC filings: contracted revenue not yet recognised' },
+  { id: 'backlogGrowth', title: 'Backlog growth', category: 'Backlog', kind: 'line', series: [{ key: 'backlogGrowth', label: 'Backlog growth' }], format: 'pct', note: 'Against the same point a year earlier' },
+  { id: 'bookToBill', title: 'Book-to-bill', category: 'Backlog', kind: 'line', series: [{ key: 'bookToBill', label: 'Book-to-bill' }], format: 'ratio', note: 'Revenue plus the change in backlog, over revenue. Above 1.0 the backlog is building. Lumpy quarter to quarter; the TTM view smooths it' },
+  { id: 'backlogVsRevenue', title: 'Backlog vs revenue', category: 'Backlog', kind: 'group', series: [{ key: 'backlog', label: 'Backlog' }, { key: 'revenue', label: 'Revenue' }], format: 'money', note: 'Backlog at the period end beside the period’s revenue' },
+  { id: 'deferredRevenue', title: 'Deferred revenue', category: 'Backlog', kind: 'bar', series: [{ key: 'deferredRevenue', label: 'Deferred revenue' }], format: 'money', overlay: { key: 'deferredRevenueGrowth', label: 'Growth (YoY)', format: 'pct' }, note: 'Billed or collected ahead of delivery, current and non-current' },
 ];
 
 /** What a new user sees: the Qualtrim-style overview. */

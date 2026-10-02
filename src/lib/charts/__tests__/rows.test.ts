@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   attachAdjustedEps,
+  attachBacklog,
   deriveRows,
   priceOn,
   quarterRows,
@@ -208,5 +209,42 @@ describe('ROIC', () => {
     const row = deriveRows(t, prices, (r) => r, 4).at(-1)!;
     // TTM EBIT 2,000 (40% of 5,000 revenue) × (1 − 20% tax) over 13,911.5.
     expect(row.roic as number).toBeCloseTo((2000 * 0.8) / 13911.5, 4);
+  });
+});
+
+describe('attachBacklog', () => {
+  // Lockheed-like quarters: revenue ~$18bn, backlog from SEC filings.
+  const rows = [
+    { key: 'a', label: 'Q1', date: '2025-03-30', fiscalYear: '2025', period: 'Q1', revenue: 18 },
+    { key: 'b', label: 'Q2', date: '2025-06-29', fiscalYear: '2025', period: 'Q2', revenue: 18.2 },
+    { key: 'c', label: 'Q3', date: '2025-09-28', fiscalYear: '2025', period: 'Q3', revenue: 18.6 },
+    { key: 'd', label: 'Q4', date: '2025-12-31', fiscalYear: '2025', period: 'Q4', revenue: 20.3 },
+    { key: 'e', label: 'Q1', date: '2026-03-29', fiscalYear: '2026', period: 'Q1', revenue: 18.5 },
+  ] as Parameters<typeof attachBacklog>[0];
+  const rpo = [
+    { date: '2025-03-30', value: 173 },
+    { date: '2025-06-29', value: 166.5 },
+    { date: '2025-09-28', value: 179.1 },
+    { date: '2025-12-31', value: 193.6 },
+    { date: '2026-03-29', value: 186.4 },
+  ];
+
+  it('derives growth, coverage and book-to-bill from the filed backlog', () => {
+    attachBacklog(rows, rpo, 4, 1, () => 75);
+    const last = rows[4];
+    expect(last.backlog).toBe(186.4);
+    expect(last.backlogGrowth as number).toBeCloseTo(186.4 / 173 - 1, 6);
+    expect(last.backlogCoverage as number).toBeCloseTo(186.4 / 75, 6);
+    // Q1 2026: revenue 18.5, backlog fell 7.2, so orders were 11.3 against 18.5 billed.
+    expect(last.bookToBill as number).toBeCloseTo((18.5 + 186.4 - 193.6) / 18.5, 6);
+    expect(rows[0].bookToBill).toBeNull();
+  });
+
+  it('matches filings dated a few days off the statement date and ignores ones far off', () => {
+    const r = [{ key: 'x', label: 'Q', date: '2025-06-30', fiscalYear: '2025', period: 'Q2', revenue: 1 }] as Parameters<typeof attachBacklog>[0];
+    attachBacklog(r, [{ date: '2025-06-27', value: 5 }], 4, 1, () => null);
+    expect(r[0].backlog).toBe(5);
+    attachBacklog(r, [{ date: '2025-05-01', value: 5 }], 4, 1, () => null);
+    expect(r[0].backlog).toBeNull();
   });
 });

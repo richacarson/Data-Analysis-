@@ -13,6 +13,7 @@ import {
   getRevenueSegments,
 } from '../fmp/endpoints';
 import { convertRows } from '../fmp/currency';
+import { getRpoSeries } from '../sec/rpo';
 import { annualAdjustedEps } from '../valuation/earnings-basis';
 import { fiscalYearLabeler, forwardEstimates } from '../valuation/fiscal';
 import {
@@ -24,6 +25,7 @@ import {
   weeklyPrices,
   weeklyValuation,
   estimateRow,
+  attachBacklog,
   quarterEstimateRows,
   ttmEstimateRows,
   deriveEstimates,
@@ -158,6 +160,13 @@ export async function buildChartData(symbol: string): Promise<ChartData> {
   const quarterly = deriveRows(quarters, prices, (r) => ttmByDate.get(r.date), 4);
   const ttm = deriveRows(trailing, prices, (r) => r, 4);
   const annual = deriveRows(years, prices, (r) => r, 1);
+
+  // Backlog from SEC filings: US filers only, whose figures are in dollars.
+  const rpo = !foreign && profile?.cik ? await optional('backlog (SEC)', getRpoSeries(profile.cik), []) : [];
+  const revenueOf = (r: PeriodRow) => (typeof r.revenue === 'number' ? r.revenue : null);
+  attachBacklog(quarterly, rpo, 4, 1, (r) => revenueOf(ttmByDate.get(r.date) ?? ({} as PeriodRow)));
+  attachBacklog(ttm, rpo, 4, 4, revenueOf);
+  attachBacklog(annual, rpo, 1, 1, revenueOf);
 
   // Consensus for the years not yet reported, labelled by fiscal year.
   const labelOf = fiscalYearLabeler(fiscalYearEnds);

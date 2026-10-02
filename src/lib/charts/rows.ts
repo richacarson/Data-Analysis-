@@ -59,6 +59,8 @@ export interface BalanceInput {
   intangibleAssets: number;
   inventory?: number;
   propertyPlantEquipmentNet?: number;
+  deferredRevenue?: number;
+  deferredRevenueNonCurrent?: number;
 }
 
 /** One period. Every value is null where the inputs cannot support it. */
@@ -205,6 +207,11 @@ function baseRow(
     goodwillIntangibles: bs ? finite((bs.goodwill ?? 0) + (bs.intangibleAssets ?? 0)) : null,
     inventory: bs ? finite(bs.inventory ?? null) : null,
     ppe: bs ? finite(bs.propertyPlantEquipmentNet ?? null) : null,
+    // Billed ahead of delivery: current plus non-current contract liabilities.
+    deferredRevenue:
+      bs && (bs.deferredRevenue !== undefined || bs.deferredRevenueNonCurrent !== undefined)
+        ? finite((bs.deferredRevenue ?? 0) + (bs.deferredRevenueNonCurrent ?? 0))
+        : null,
   };
 }
 
@@ -532,5 +539,52 @@ export function deriveEstimates(history: PeriodRow[], estimates: PeriodRow[], la
     r.ebitdaMargin = ratio(n(r, 'ebitda'), n(r, 'revenue'));
     r.netMargin = ratio(n(r, 'netIncome'), n(r, 'revenue'));
     return r;
+  });
+}
+
+/**
+ * Backlog (remaining performance obligations, from SEC filings) on each row.
+ *
+ * - backlog: contracted revenue not yet recognised, at the period end.
+ * - backlogGrowth: against the same point a year earlier.
+ * - backlogCoverage: backlog over the trailing year's revenue, i.e. years of
+ *   revenue already under contract.
+ * - bookToBill: (revenue + change in backlog) / revenue over the period, the
+ *   orders-to-sales ratio implied by the filings. Above 1, backlog is building.
+ *
+ * `yearLag` is the rows per year (4 quarterly, 1 annual); `periodLag` the rows
+ * per period the row's revenue covers (1 for quarterly and annual rows, 4 for
+ * trailing-twelve-month rows). `trailingRevenue` gives the year's revenue.
+ */
+export function attachBacklog(
+  rows: PeriodRow[],
+  rpo: Array<{ date: string; value: number }>,
+  yearLag: number,
+  periodLag: number,
+  trailingRevenue: (row: PeriodRow) => Num,
+): void {
+  const nearest = (date: string): Num => {
+    const t = Date.parse(`${date.slice(0, 10)}T00:00:00Z`);
+    let best: { gap: number; value: number } | null = null;
+    for (const p of rpo) {
+      const gap = Math.abs(Date.parse(`${p.date}T00:00:00Z`) - t) / DAY;
+      if (gap <= 10 && (!best || gap < best.gap)) best = { gap, value: p.value };
+    }
+    return best ? best.value : null;
+  };
+  for (const r of rows) r.backlog = nearest(r.date);
+  rows.forEach((r, i) => {
+    const backlog = r.backlog as Num;
+    const yearAgo = i >= yearLag ? (rows[i - yearLag].backlog as Num) : null;
+    r.backlogGrowth = growth(backlog, yearAgo);
+    const trailing = trailingRevenue(r);
+    r.backlogCoverage = backlog !== null && trailing !== null && trailing > 0 ? backlog / trailing : null;
+    const start = i >= periodLag ? (rows[i - periodLag].backlog as Num) : null;
+    const revenue = finite(r.revenue);
+    r.bookToBill =
+      backlog !== null && start !== null && revenue !== null && revenue > 0 ? (revenue + backlog - start) / revenue : null;
+    const deferred = finite(r.deferredRevenue);
+    const deferredYearAgo = i >= yearLag ? finite(rows[i - yearLag].deferredRevenue) : null;
+    r.deferredRevenueGrowth = growth(deferred, deferredYearAgo);
   });
 }
