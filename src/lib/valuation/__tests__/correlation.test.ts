@@ -58,3 +58,16 @@ describe('portfolioLink', () => {
     expect(sleeve.beta).toBeCloseTo(1, 1);
   });
 });
+
+describe('portfolioLink with weights', () => {
+  it('follows the holdings the weights favour', () => {
+    const m = series(market);
+    const tracker = series(market);
+    const contrarian = series(market.map((r) => -r));
+    const heavyTracker = portfolioLink([tracker, contrarian], m, 156, [0.9, 0.1])!;
+    const heavyContrarian = portfolioLink([tracker, contrarian], m, 156, [0.1, 0.9])!;
+    expect(heavyTracker.correlation).toBeGreaterThan(0.9);
+    expect(heavyContrarian.correlation).toBeLessThan(-0.9);
+    expect(heavyTracker.beta).toBeCloseTo(0.8, 1);
+  });
+});

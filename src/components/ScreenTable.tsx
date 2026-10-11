@@ -6,10 +6,11 @@ import type { ScreenRow } from '@/lib/screen/run';
 import { sleevesHolding } from '@/data/sleeves';
 import { money, multiple, num, pct, signedPct } from '@/lib/format';
 
-type SortKey = 'expectedCagr' | 'stretch' | 'symbol' | 'requiredExitPe' | 'dividendYield' | 'correlation';
+type SortKey = 'expectedCagr' | 'stretch' | 'symbol' | 'requiredExitPe' | 'dividendYield' | 'correlation' | 'weight';
 
 const COLUMNS: Array<{ key: SortKey | null; label: string; numeric?: boolean }> = [
   { key: 'symbol', label: 'Ticker' },
+  { key: 'weight', label: 'Weight', numeric: true },
   { key: null, label: 'Sleeves' },
   { key: null, label: 'Price', numeric: true },
   { key: null, label: 'EPS at horizon', numeric: true },
@@ -50,7 +51,10 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
     }
   }
 
+  const hasWeights = rows.some((r) => typeof r.weight === 'number');
+  const columns = COLUMNS.filter((c) => c.key !== 'weight' || hasWeights);
   const sortOptions: Array<{ key: SortKey; label: string }> = [
+    ...(hasWeights ? [{ key: 'weight' as const, label: 'Weight' }] : []),
     { key: 'expectedCagr', label: 'Expected CAGR' },
     { key: 'stretch', label: 'Stretch' },
     { key: 'requiredExitPe', label: 'Must believe' },
@@ -108,6 +112,9 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
                 <div className="flex items-baseline justify-between gap-3">
                   <div className="flex min-w-0 items-baseline gap-2">
                     <span className="text-[14px] font-semibold text-t1">{r.symbol}</span>
+                    {typeof r.weight === 'number' && r.weight > 0 && (
+                      <span className="tabular text-[12px] text-t4">{pct(r.weight, 2)}</span>
+                    )}
                     <span className="tabular text-[12px] text-t3">
                       {r.price !== null ? money(r.price) : '—'}
                     </span>
@@ -160,7 +167,7 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
         <table className="w-full min-w-[900px] text-[12px]">
           <thead>
             <tr className="border-b border-line">
-              {COLUMNS.map((c) => (
+              {columns.map((c) => (
                 <th
                   key={c.label}
                   scope="col"
@@ -193,6 +200,11 @@ export function ScreenTable({ rows, hurdle }: { rows: ScreenRow[]; hurdle: numbe
                       {r.symbol}
                     </Link>
                   </td>
+                  {hasWeights && (
+                    <td className="tabular px-3 py-2 text-right text-t2">
+                      {typeof r.weight === 'number' && r.weight > 0 ? pct(r.weight, 2) : '—'}
+                    </td>
+                  )}
                   <td className="px-3 py-2 text-[10px] uppercase tracking-label text-t4">
                     {sleeves.map((s) => s.name).join(' · ')}
                   </td>

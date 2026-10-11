@@ -92,9 +92,13 @@ export function portfolioLink(
   stocks: Array<Array<{ date: string; price: number }>>,
   market: Array<{ date: string; price: number }>,
   weeks: number,
+  /** Position weights aligned with `stocks`; equal when omitted. */
+  weights?: number[],
 ): (MarketLink & { holdings: number }) | null {
   const m = weeklyCloses(market);
-  const series = stocks.map(weeklyCloses).filter((w) => w.size > 0);
+  const series = stocks
+    .map((s, i) => ({ w: weeklyCloses(s), weight: weights?.[i] ?? 1 }))
+    .filter((x) => x.w.size > 0 && x.weight > 0);
   if (!series.length) return null;
   const keys = [...m.keys()].sort();
   const rp: number[] = [];
@@ -102,14 +106,21 @@ export function portfolioLink(
   for (let i = 1; i < keys.length; i++) {
     const [prev, cur] = [keys[i - 1], keys[i]];
     if ((Date.parse(cur) - Date.parse(prev)) / 86_400_000 !== 7) continue;
-    const moves: number[] = [];
-    for (const w of series) {
+    let sum = 0;
+    let weight = 0;
+    let count = 0;
+    for (const { w, weight: wt } of series) {
       const a = w.get(prev);
       const b = w.get(cur);
-      if (a && b) moves.push(b / a - 1);
+      if (a && b) {
+        sum += wt * (b / a - 1);
+        weight += wt;
+        count++;
+      }
     }
-    if (moves.length < series.length / 2) continue;
-    rp.push(Math.log(1 + moves.reduce((t, v) => t + v, 0) / moves.length));
+    if (count < series.length / 2 || !(weight > 0)) continue;
+    // Missing holdings drop out and the rest are reweighted for that week.
+    rp.push(Math.log(1 + sum / weight));
     rm.push(Math.log(m.get(cur)! / m.get(prev)!));
   }
   const link = linkFromReturns(rp, rm, weeks);

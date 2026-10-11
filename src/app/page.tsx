@@ -3,6 +3,7 @@ import { Watchlist } from '@/components/Watchlist';
 import { HoldingsBrowser } from '@/components/HoldingsBrowser';
 import { SLEEVES, ALL_SLEEVE_TICKERS } from '@/data/sleeves';
 import { getWatchlistSymbols } from '@/lib/watchlist';
+import { getWeightBook } from '@/lib/sleeves/weights';
 
 /**
  * 4a Hairline home: a page title, then one rule-topped figure per sleeve
@@ -10,7 +11,7 @@ import { getWatchlistSymbols } from '@/lib/watchlist';
  * the watchlist as plain ruled lists — no boxed panels.
  */
 export default async function HomePage() {
-  const watchlist = await getWatchlistSymbols();
+  const [watchlist, book] = await Promise.all([getWatchlistSymbols(), getWeightBook()]);
   return (
     <div className="space-y-12 sm:space-y-14">
       <div className="flex flex-col gap-2">
@@ -20,13 +21,20 @@ export default async function HomePage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-6 gap-y-8 md:grid-cols-6 md:gap-10">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-8 md:grid-cols-4 md:gap-10 xl:grid-cols-8">
         <Link href="/screen" className="hero-stat hero-stat-lead group col-span-2 md:col-span-1">
           <span className="hero-label">Screen</span>
           <span className="hero-value">{ALL_SLEEVE_TICKERS.length}</span>
           <span className="hero-sub group-hover:text-goldInk">All sleeves by expected return →</span>
         </Link>
         {SLEEVES.map((s) => (
+          <Link key={s.key} href={`/screen?sleeve=${s.key}`} className="hero-stat group">
+            <span className="hero-label">{s.name}</span>
+            <span className="hero-value">{s.tickers.length}</span>
+            <span className="hero-sub group-hover:text-goldInk">Screen {s.name} →</span>
+          </Link>
+        ))}
+        {book.stored.map((s) => (
           <Link key={s.key} href={`/screen?sleeve=${s.key}`} className="hero-stat group">
             <span className="hero-label">{s.name}</span>
             <span className="hero-value">{s.tickers.length}</span>

@@ -18,14 +18,14 @@ function historyStart(): string {
   return new Date(Date.UTC(now.getUTCFullYear() - 3, now.getUTCMonth() - 1, 1)).toISOString().slice(0, 10);
 }
 
-/** A sleeve as one equal-weighted portfolio, over three years, from the same cached prices. */
-export async function sleeveMarketLink(symbols: string[]) {
+/** A sleeve as one portfolio (weighted when weights are given, else equal), over three years. */
+export async function sleeveMarketLink(symbols: string[], weights?: number[]) {
   const from = historyStart();
   const [market, ...stocks] = await Promise.all([
     getPriceHistory(MARKET_PROXY, from),
     ...symbols.map((s) => getPriceHistory(s, from).catch(() => [])),
   ]);
-  return portfolioLink(stocks, market, 156);
+  return portfolioLink(stocks, market, 156, weights);
 }
 
 /**

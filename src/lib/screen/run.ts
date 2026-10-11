@@ -45,6 +45,8 @@ export interface ScreenRow {
   horizonExtendedFrom?: string;
   /** Exit multiple capped at the company's own highest historical P/E. */
   exitCapNote?: string;
+  /** Position weight in the sleeve being screened, when weights are loaded. */
+  weight?: number;
   /** Correlation of weekly returns with the S&P 500 over three years. */
   correlation?: number | null;
   /** Capped at today's multiple as a fast grower: the return is an upper bound. */

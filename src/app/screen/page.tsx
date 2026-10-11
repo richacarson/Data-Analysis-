@@ -4,6 +4,7 @@ import { SLEEVES, sleeveByKey, ALL_SLEEVE_TICKERS } from '@/data/sleeves';
 import { DEFAULT_HURDLE } from '@/lib/valuation/build';
 import { getWatchlistSymbols } from '@/lib/watchlist';
 import { sleeveMarketLink } from '@/lib/valuation/market';
+import { getWeightBook } from '@/lib/sleeves/weights';
 import { Panel, Stat } from '@/components/ui';
 import { ScreenTable } from '@/components/ScreenTable';
 
@@ -25,21 +26,38 @@ export default async function ScreenPage({
   searchParams: Promise<{ sleeve?: string; hurdle?: string }>;
 }) {
   const { sleeve: sleeveKey, hurdle: hurdleParam } = await searchParams;
-  const watchlist = await getWatchlistSymbols();
+  const [watchlist, book] = await Promise.all([getWatchlistSymbols(), getWeightBook()]);
   const onWatchlist = sleeveKey === 'watchlist';
-  const sleeve = sleeveKey && !onWatchlist ? sleeveByKey(sleeveKey) : undefined;
+  // A sleeve in the code, or one defined only by its weights (post-rebalance).
+  const sleeve =
+    sleeveKey && !onWatchlist ? (sleeveByKey(sleeveKey) ?? book.stored.find((s) => s.key === sleeveKey)) : undefined;
   const tickers = onWatchlist ? watchlist : sleeve ? sleeve.tickers : ALL_SLEEVE_TICKERS;
+  const weightSet = sleeve ? book.weights.get(sleeve.key) : undefined;
+  const weightOf = (symbol: string) => (weightSet ? (weightSet.bySymbol.get(symbol.toUpperCase()) ?? 0) : 1);
 
   const parsedHurdle = hurdleParam ? Number(hurdleParam) : NaN;
   const hurdle = Number.isFinite(parsedHurdle) && parsedHurdle > 0 ? parsedHurdle : DEFAULT_HURDLE;
 
-  const rows = await runScreen(tickers, { hurdle });
+  const screened = await runScreen(tickers, { hurdle });
+  const rows = weightSet ? screened.map((r) => ({ ...r, weight: weightOf(r.symbol) })) : screened;
   // The same cached price histories the rows used, combined into one portfolio.
-  const portfolio = await sleeveMarketLink(tickers).catch(() => null);
-  const correlations = rows.map((r) => r.correlation).filter((c): c is number => typeof c === 'number');
-  const averageCorrelation = correlations.length
-    ? correlations.reduce((t, c) => t + c, 0) / correlations.length
-    : null;
+  const portfolio = await sleeveMarketLink(tickers, weightSet ? tickers.map(weightOf) : undefined).catch(() => null);
+
+  /** Average of a field across rows that have it, by position weight (equal without weights). */
+  const weightedMean = (pick: (r: (typeof rows)[number]) => number | null | undefined) => {
+    let sum = 0;
+    let weight = 0;
+    for (const r of rows) {
+      const v = pick(r);
+      if (typeof v !== 'number') continue;
+      sum += weightOf(r.symbol) * v;
+      weight += weightOf(r.symbol);
+    }
+    return weight > 0 ? { value: sum / weight, weight } : null;
+  };
+  const totalWeight = rows.reduce((t, r) => t + weightOf(r.symbol), 0);
+  const correlation = weightedMean((r) => r.correlation);
+  const correlationCount = rows.filter((r) => typeof r.correlation === 'number').length;
 
   const scored = rows.filter((r) => r.expectedCagr !== null);
   // Implausible outputs (a currency mix-up, a broken feed) are kept out of
@@ -50,9 +68,17 @@ export default async function ScreenPage({
   const thin = (r: (typeof rows)[number]) => r.analystCount > 0 && r.analystCount < 3;
   const clearing = scored.filter((r) => r.clearsHurdle && !thin(r));
   const clearingThin = scored.filter((r) => r.clearsHurdle && thin(r));
-  // An equal-weighted sleeve returns the average of its holdings, so that is
-  // the headline; the median beside it shows whether a few names skew it.
-  const average = scored.length > 0 ? scored.reduce((sum, r) => sum + r.expectedCagr!, 0) / scored.length : null;
+  // A sleeve returns the weighted average of its holdings, so that is the
+  // headline; the equal-weighted figure and the median show what the weights do.
+  const weighted = weightedMean((r) => r.expectedCagr);
+  const average = weighted?.value ?? null;
+  const equalAverage = scored.length > 0 ? scored.reduce((sum, r) => sum + r.expectedCagr!, 0) / scored.length : null;
+  const clearingWeight = clearing.reduce((t, r) => t + weightOf(r.symbol), 0);
+  const weightNote = weightSet
+    ? `Weighted to ${weightSet.source ?? 'stored weights'}${weightSet.asOf ? `, as of ${weightSet.asOf}` : ''}`
+    : sleeve || !onWatchlist
+      ? 'Equal-weighted: no position weights loaded for this view'
+      : 'Equal-weighted';
   const median =
     scored.length > 0
       ? [...scored].sort((a, b) => a.expectedCagr! - b.expectedCagr!)[
@@ -67,6 +93,7 @@ export default async function ScreenPage({
         <h1 className="mt-1.5 font-serif text-[24px] tracking-tight text-t1">
           {onWatchlist ? 'Watchlist' : sleeve ? sleeve.name : 'All sleeves'}
         </h1>
+        <p className="mt-1 text-[12px] text-t3">{weightNote}</p>
         <div className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-0.5 sm:mx-0 sm:flex-wrap sm:px-0">
           <Link
             href="/screen"
@@ -84,6 +111,17 @@ export default async function ScreenPage({
                 sleeve?.key === s.key
                   ? 'border-lineActive text-gold'
                   : 'border-line bg-card text-t2 hover:text-gold'
+              }`}
+            >
+              {s.name} ({s.tickers.length})
+            </Link>
+          ))}
+          {book.stored.map((s) => (
+            <Link
+              key={s.key}
+              href={`/screen?sleeve=${s.key}`}
+              className={`shrink-0 border px-3 py-1.5 text-[12px] font-medium ${
+                sleeve?.key === s.key ? 'border-lineActive text-gold' : 'border-line bg-card text-t2 hover:text-gold'
               }`}
             >
               {s.name} ({s.tickers.length})
@@ -110,30 +148,34 @@ export default async function ScreenPage({
           tone={clearing.length - scored.length / 2}
           sub={
             scored.length
-              ? `${((clearing.length / scored.length) * 100).toFixed(0)}% of scored${
-                  clearingThin.length ? ` · ${clearingThin.length} more on fewer than 3 analysts` : ''
-                }`
+              ? `${
+                  weightSet
+                    ? `${((clearingWeight / totalWeight) * 100).toFixed(0)}% of the sleeve's weight`
+                    : `${((clearing.length / scored.length) * 100).toFixed(0)}% of scored`
+                }${clearingThin.length ? ` · ${clearingThin.length} more on fewer than 3 analysts` : ''}`
               : undefined
           }
         />
         <Stat
-          label="Average expected CAGR"
+          label={weightSet ? 'Weighted expected CAGR' : 'Average expected CAGR'}
           value={average !== null ? `${(average * 100).toFixed(1)}%` : '—'}
           tone={average !== null ? average - hurdle : undefined}
           sub={
-            median !== null
-              ? `Equal-weighted across ${scored.length} scored · median ${(median * 100).toFixed(1)}%`
-              : undefined
+            median === null
+              ? undefined
+              : weightSet && weighted && equalAverage !== null
+                ? `${((weighted.weight / totalWeight) * 100).toFixed(0)}% of weight scored · equal-weighted ${(equalAverage * 100).toFixed(1)}% · median ${(median * 100).toFixed(1)}%`
+                : `Equal-weighted across ${scored.length} scored · median ${(median * 100).toFixed(1)}%`
           }
         />
         <Stat
           label="Correlation to S&P 500"
-          value={averageCorrelation !== null ? averageCorrelation.toFixed(2) : '—'}
+          value={correlation ? correlation.value.toFixed(2) : '—'}
           sub={
             portfolio
-              ? `Average of ${correlations.length} · as one portfolio ${portfolio.correlation.toFixed(2)}, beta ${portfolio.beta.toFixed(2)}`
-              : correlations.length
-                ? `Average of ${correlations.length}, weekly returns over 3 years`
+              ? `${weightSet ? 'Weighted average' : 'Average'} of ${correlationCount} · as one portfolio ${portfolio.correlation.toFixed(2)}, beta ${portfolio.beta.toFixed(2)}`
+              : correlationCount
+                ? `Average of ${correlationCount}, weekly returns over 3 years`
                 : undefined
           }
         />
