@@ -6,9 +6,10 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 /**
- * Records the day's S&P 500 snapshot after the close. A cold run is about 510
- * requests; if one invocation runs out of time, what it fetched is cached and
- * the next pass (chained, up to three) finishes from there.
+ * Records the day's S&P 500 snapshot after the close. A cold run is several
+ * thousand requests (the expected return runs the full model on every
+ * member), more than one invocation's time allows: what a pass fetched is
+ * cached, and the next pass (chained, up to eight) finishes from there.
  */
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
   const snapshot = await buildSp500Snapshot(started + 240_000);
 
   if (!snapshot) {
-    if (pass < 3) {
+    if (pass < 8) {
       const next = new URL(request.nextUrl);
       next.searchParams.set('pass', String(pass + 1));
       after(() =>
@@ -41,6 +42,9 @@ export async function GET(request: NextRequest) {
     members: snapshot.members,
     used: snapshot.used,
     years: snapshot.years.map((y) => ({ year: y.year, pe: y.pe && Number(y.pe.toFixed(2)), growth: y.growth })),
+    trailing: snapshot.trailing,
+    cape: snapshot.cape,
+    expected: snapshot.expected,
     seconds: Math.round((Date.now() - started) / 1000),
   });
 }

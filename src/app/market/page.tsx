@@ -1,7 +1,9 @@
 import { Panel, Stat } from '@/components/ui';
 import { MarketHistory } from '@/components/MarketHistory';
-import { loadMarketSnapshots } from '@/lib/market/store';
+import { MarketReferenceForm } from '@/components/MarketReferenceForm';
+import { loadMarketReference, loadMarketSnapshots } from '@/lib/market/store';
 import type { BasketSummary } from '@/lib/market/sp500';
+import { HISTORY_SOURCE, HISTORY_THROUGH, historySeries, periodStats, type HistoryMetric } from '@/lib/market/history';
 import type { BasketYear } from '@/lib/valuation/aggregate';
 import { pct, signedPct, toneClass } from '@/lib/format';
 
@@ -65,8 +67,51 @@ function BreakdownTable({ years, children }: { years: string[]; children: React.
   );
 }
 
+function monthLabel(month: string): string {
+  return new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+/** Today's figure against Shiller's history: average, median and rank by period. */
+function HistoryTable({ metric, today }: { metric: HistoryMetric; today: number | null }) {
+  const stats = periodStats(historySeries(metric), today);
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-[12px]">
+        <thead>
+          <tr className="border-b border-line text-[10px] uppercase tracking-label text-t4">
+            <th className="px-4 py-2 text-left font-medium">Period</th>
+            <th className="px-2 py-2 text-right font-medium">Average</th>
+            <th className="px-2 py-2 text-right font-medium">Median</th>
+            <th className="px-2 py-2 text-right font-medium">Today vs avg</th>
+            <th className="px-4 py-2 text-right font-medium">Today above</th>
+          </tr>
+        </thead>
+        <tbody>
+          {stats.map((p) => {
+            const gap = today !== null ? today / p.average - 1 : null;
+            return (
+              <tr key={p.label} className="border-b border-hairline last:border-0">
+                <td className="px-4 py-2 text-t1">
+                  {p.label}
+                  <span className="mt-0.5 block text-[11px] text-t4">from {monthLabel(p.from)}</span>
+                </td>
+                <td className="tabular px-2 py-2 text-right text-t1">{p.average.toFixed(1)}×</td>
+                <td className="tabular px-2 py-2 text-right text-t1">{p.median.toFixed(1)}×</td>
+                <td className={`tabular px-2 py-2 text-right ${gap !== null ? toneClass(-gap) : 'text-t4'}`}>{signedPct(gap, 0)}</td>
+                <td className="tabular px-4 py-2 text-right text-t2">
+                  {p.percentile !== null ? `${(p.percentile * 100).toFixed(0)}% of months` : '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default async function MarketPage() {
-  const snapshots = await loadMarketSnapshots('sp500');
+  const [snapshots, reference] = await Promise.all([loadMarketSnapshots('sp500'), loadMarketReference()]);
   const latest = snapshots[snapshots.length - 1] ?? null;
 
   if (!latest) {
@@ -112,6 +157,116 @@ export default async function MarketPage() {
           />
         ))}
       </div>
+
+      <Panel
+        eyebrow="Against history"
+        title="Is the market expensive?"
+        subtitle={`Reported earnings, Shiller data through ${HISTORY_THROUGH ? monthLabel(HISTORY_THROUGH) : '—'}`}
+      >
+        {latest.trailing || latest.cape ? (
+          <>
+            <div className="grid grid-cols-2 border-b border-line">
+              <Stat
+                label="Trailing P/E today"
+                value={latest.trailing?.value ? `${latest.trailing.value.toFixed(1)}×` : '—'}
+                sub={latest.trailing ? `Last 4 reported quarters · ${pct(latest.trailing.coverage, 0)} of index value` : undefined}
+              />
+              <Stat
+                label="CAPE today"
+                value={latest.cape?.value ? `${latest.cape.value.toFixed(1)}×` : '—'}
+                sub={latest.cape ? `10-year real earnings · ${pct(latest.cape.coverage, 0)} of index value` : undefined}
+              />
+            </div>
+            <p className="eyebrow-muted px-4 pt-3">Trailing P/E</p>
+            <HistoryTable metric="trailing" today={latest.trailing?.value ?? null} />
+            <p className="eyebrow-muted border-t border-line px-4 pt-3">CAPE (Shiller P/E)</p>
+            <HistoryTable metric="cape" today={latest.cape?.value ?? null} />
+          </>
+        ) : (
+          <p className="px-4 py-3 text-[12px] text-t3">Trailing P/E and CAPE start with the next evening&rsquo;s reading.</p>
+        )}
+        <p className="border-t border-line px-4 py-3 text-[11px] leading-relaxed text-t4">
+          Today&rsquo;s figures are built from the members&rsquo; own reported earnings, weighted by market value, with
+          losses netted in, as the index&rsquo;s reported earnings are; CAPE uses each member&rsquo;s last ten annual
+          reports in today&rsquo;s dollars (CPI from FRED). History: {HISTORY_SOURCE}. Green means cheaper than the
+          average, red dearer.
+        </p>
+      </Panel>
+
+      <Panel eyebrow="Forward P/E" title="Against FactSet's averages" subtitle="Next twelve months' consensus">
+        {(() => {
+          const ntm = latest.ntmPe ?? latest.years[0]?.pe ?? null;
+          const refs = [
+            { label: '5-year average', ref: reference.get('factset_fwd_pe_5y') },
+            { label: '10-year average', ref: reference.get('factset_fwd_pe_10y') },
+          ];
+          const asOf = refs.find((r) => r.ref?.asOf)?.ref?.asOf ?? null;
+          return (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-3">
+                <Stat label="Today" value={ntm ? `${ntm.toFixed(1)}×` : '—'} sub="Bottom-up, analyst EPS" />
+                {refs.map(({ label, ref }) => {
+                  const gap = ntm && ref ? ntm / ref.value - 1 : null;
+                  return (
+                    <Stat
+                      key={label}
+                      label={`FactSet ${label}`}
+                      value={ref ? `${ref.value.toFixed(1)}×` : '—'}
+                      sub={
+                        gap !== null ? (
+                          <span className={toneClass(-gap)}>Today {signedPct(gap, 0)} {gap >= 0 ? 'above' : 'below'}</span>
+                        ) : (
+                          'Not entered yet'
+                        )
+                      }
+                    />
+                  );
+                })}
+              </div>
+              <div className="border-t border-line px-4 py-3">
+                <MarketReferenceForm
+                  fiveYear={reference.get('factset_fwd_pe_5y')?.value ?? null}
+                  tenYear={reference.get('factset_fwd_pe_10y')?.value ?? null}
+                  asOf={asOf}
+                />
+                <p className="mt-2 text-[11px] leading-relaxed text-t4">
+                  FactSet publishes both averages each week in its free Earnings Insight report. Analyst EPS leaves out
+                  one-off charges, so forward P/Es are only compared with forward averages, never with the reported-earnings
+                  history above.{asOf ? ` Averages as of ${day(asOf)}.` : ''}
+                </p>
+              </div>
+            </>
+          );
+        })()}
+      </Panel>
+
+      {latest.expected && (
+        <Panel
+          eyebrow="Expected return"
+          title="The market through the house model"
+          subtitle="Same 3-year calculation as each stock page"
+        >
+          <div className="stat-grid grid-cols-2 md:grid-cols-4">
+            <Stat
+              label="Expected CAGR · by value"
+              value={pct(latest.expected.average, 1)}
+              tone={latest.expected.average !== null ? latest.expected.average - latest.expected.hurdle : undefined}
+              sub={`vs ${pct(latest.expected.hurdle, 0)} hurdle`}
+            />
+            <Stat label="Median · by value" value={pct(latest.expected.median, 1)} sub="Half the index's value above it" />
+            <Stat
+              label={`Clearing ${pct(latest.expected.hurdle, 0)}`}
+              value={pct(latest.expected.clearing, 0)}
+              sub="Share of the scored value"
+            />
+            <Stat
+              label="Scored"
+              value={String(latest.expected.count)}
+              sub={`${pct(latest.expected.coverage, 0)} of index value`}
+            />
+          </div>
+        </Panel>
+      )}
 
       <Panel
         eyebrow="History"

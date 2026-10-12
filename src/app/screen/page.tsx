@@ -192,11 +192,18 @@ export default async function ScreenPage({
           value={average !== null ? `${(average * 100).toFixed(1)}%` : '—'}
           tone={average !== null ? average - hurdle : undefined}
           sub={
-            median === null
-              ? undefined
-              : weightSet && weighted && equalAverage !== null
-                ? `${((weighted.weight / totalWeight) * 100).toFixed(0)}% of weight scored · equal-weighted ${(equalAverage * 100).toFixed(1)}% · median ${(median * 100).toFixed(1)}%`
-                : `Equal-weighted across ${scored.length} scored · median ${(median * 100).toFixed(1)}%`
+            median === null ? undefined : (
+              <>
+                <span className="block">
+                  {weightSet && weighted && equalAverage !== null
+                    ? `${((weighted.weight / totalWeight) * 100).toFixed(0)}% of weight scored · equal-weighted ${(equalAverage * 100).toFixed(1)}% · median ${(median * 100).toFixed(1)}%`
+                    : `Equal-weighted across ${scored.length} scored · median ${(median * 100).toFixed(1)}%`}
+                </span>
+                {market?.expected?.average != null ? (
+                  <span className="block">S&amp;P 500 {(market.expected.average * 100).toFixed(1)}% by value</span>
+                ) : null}
+              </>
+            )
           }
         />
         <Stat

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { basketYears, calendarize, type BasketHolding } from '../aggregate';
+import { basketYears, calendarize, returnSummary, totalMultiple, type BasketHolding } from '../aggregate';
 
 const holding = (symbol: string, weight: number, price: number, eps: Record<string, number>): BasketHolding => ({
   symbol,
@@ -64,5 +64,35 @@ describe('calendarize', () => {
     expect(m.get('2027')).toBeCloseTo(9, 1);
     // CY2028 would need FY2029 for its last quarter.
     expect(m.has('2028')).toBe(false);
+  });
+});
+
+describe('totalMultiple', () => {
+  it('nets losses into the earnings, as index earnings do', () => {
+    const m = totalMultiple([
+      { weight: 1, price: 100, perShare: 10 },
+      { weight: 1, price: 100, perShare: -5 },
+      { weight: 1, price: 100, perShare: null },
+    ]);
+    expect(m.value).toBeCloseTo(2 / 0.05, 6);
+    expect(m.count).toBe(2);
+    expect(m.coverage).toBeCloseTo(2 / 3, 6);
+  });
+});
+
+describe('returnSummary', () => {
+  it('weights the average, the median and the share clearing', () => {
+    const r = returnSummary(
+      [
+        { weight: 3, cagr: 0.05 },
+        { weight: 1, cagr: 0.2 },
+        { weight: 1, cagr: null },
+      ],
+      0.15,
+    );
+    expect(r.average).toBeCloseTo((0.15 + 0.2) / 4, 6);
+    expect(r.median).toBe(0.05);
+    expect(r.clearing).toBeCloseTo(0.25, 6);
+    expect(r.coverage).toBeCloseTo(0.8, 6);
   });
 });

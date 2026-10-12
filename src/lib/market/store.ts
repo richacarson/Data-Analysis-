@@ -45,3 +45,19 @@ export async function latestMarketSnapshot(index: MarketSnapshot['index'] = 'sp5
   if (error || !data?.length) return null;
   return data[0].payload as MarketSnapshot;
 }
+
+export interface MarketReference {
+  value: number;
+  asOf: string | null;
+}
+
+/** Figures typed in by the team (FactSet's average forward P/Es), by key. */
+export async function loadMarketReference(): Promise<Map<string, MarketReference>> {
+  const supabase = await createClient();
+  if (!supabase) return new Map();
+  const { data, error } = await supabase.from('eq_market_reference').select('key, value, as_of');
+  if (error || !data) return new Map();
+  return new Map(
+    (data as Array<{ key: string; value: number; as_of: string | null }>).map((r) => [r.key, { value: r.value, asOf: r.as_of }]),
+  );
+}

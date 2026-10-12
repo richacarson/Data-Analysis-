@@ -123,3 +123,69 @@ export function calendarize(estimates: Array<{ date: string; eps: number }>, yea
   }
   return out;
 }
+
+export interface TotalMultiple {
+  /** Total value over total earnings; null when the earnings sum to a loss. */
+  value: number | null;
+  count: number;
+  /** Share of the basket's weight with the earnings figure. */
+  coverage: number;
+}
+
+/**
+ * Value over earnings with losses netted in, the way an index's reported
+ * earnings are: Shiller's S&P 500 earnings are the members' profits less
+ * their losses. Used for the trailing P/E and CAPE that are set against his
+ * history; the forward P/E leaves loss years out instead.
+ */
+export function totalMultiple(items: Array<{ weight: number; price: number; perShare: number | null }>): TotalMultiple {
+  const usable = items.filter((i) => i.weight > 0 && i.price > 0);
+  const total = usable.reduce((t, i) => t + i.weight, 0);
+  let weight = 0;
+  let earnings = 0;
+  let count = 0;
+  for (const i of usable) {
+    if (i.perShare === null || !Number.isFinite(i.perShare)) continue;
+    if (i.perShare > 0 && i.price / i.perShare < MIN_SANE_PE) continue;
+    weight += i.weight;
+    earnings += (i.weight * i.perShare) / i.price;
+    count += 1;
+  }
+  return { value: earnings > 0 ? weight / earnings : null, count, coverage: total > 0 ? weight / total : 0 };
+}
+
+export interface ReturnSummary {
+  /** Average expected CAGR by weight, over the holdings scored. */
+  average: number | null;
+  /** The CAGR with half the scored weight above it. */
+  median: number | null;
+  /** Share of the scored weight at or above the hurdle. */
+  clearing: number;
+  /** Share of the whole basket's weight that was scored. */
+  coverage: number;
+  count: number;
+}
+
+export function returnSummary(items: Array<{ weight: number; cagr: number | null }>, hurdle: number): ReturnSummary {
+  const total = items.reduce((t, i) => t + (i.weight > 0 ? i.weight : 0), 0);
+  const scored = items.filter((i): i is { weight: number; cagr: number } => i.weight > 0 && i.cagr !== null && Number.isFinite(i.cagr));
+  const w = scored.reduce((t, i) => t + i.weight, 0);
+  if (!scored.length || w <= 0) return { average: null, median: null, clearing: 0, coverage: 0, count: 0 };
+  const sorted = [...scored].sort((a, b) => a.cagr - b.cagr);
+  let running = 0;
+  let med: number | null = null;
+  for (const i of sorted) {
+    running += i.weight;
+    if (running >= w / 2) {
+      med = i.cagr;
+      break;
+    }
+  }
+  return {
+    average: scored.reduce((t, i) => t + i.weight * i.cagr, 0) / w,
+    median: med,
+    clearing: scored.filter((i) => i.cagr >= hurdle).reduce((t, i) => t + i.weight, 0) / w,
+    coverage: total > 0 ? w / total : 0,
+    count: scored.length,
+  };
+}

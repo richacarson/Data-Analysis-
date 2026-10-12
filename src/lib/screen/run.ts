@@ -100,11 +100,18 @@ export async function pooled<T, R>(
  */
 export async function runScreen(
   symbols: string[],
-  options: { horizonYears?: number; hurdle?: number } = {},
+  options: {
+    horizonYears?: number;
+    hurdle?: number;
+    /** Stop starting new tickers after this time (ms epoch); default four minutes from now. */
+    deadline?: number;
+    /** Skip the S&P 500 correlation, which needs three years of prices per ticker. */
+    correlation?: boolean;
+  } = {},
 ): Promise<ScreenRow[]> {
   const horizonYears = options.horizonYears ?? DEFAULT_HORIZON_YEARS;
   const hurdle = options.hurdle ?? DEFAULT_HURDLE;
-  const started = Date.now();
+  const deadline = options.deadline ?? Date.now() + 240_000;
 
   const once = <T,>(cache: Map<string, Promise<T>>, key: string, load: () => Promise<T>) => {
     if (!cache.has(key)) cache.set(key, load());
@@ -139,7 +146,7 @@ export async function runScreen(
     // A cold run is paced to FMP's rate limit. Past four minutes, stop starting
     // new tickers and say so: everything fetched so far is cached, so a reload
     // finishes the rest in seconds instead of the page timing out.
-    if (Date.now() - started > 240_000) {
+    if (Date.now() > deadline) {
       return { ...base, note: 'Still loading. Reload in a minute to finish.' };
     }
 
@@ -195,7 +202,7 @@ export async function runScreen(
       });
 
       // Diversification read, independent of the valuation.
-      const market = await marketLinks(symbol).catch(() => null);
+      const market = options.correlation === false ? null : await marketLinks(symbol).catch(() => null);
 
       const common: ScreenRow = {
         ...base,
