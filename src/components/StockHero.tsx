@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import { sleeveByKey, sleevesHolding } from '@/data/sleeves';
-import { multiple, num, pct, roundMoney, signedPct, toneClass } from '@/lib/format';
+import { multiple, num, pct, signedPct, toneClass } from '@/lib/format';
 import type { ForwardPe } from '@/lib/valuation/house';
 
 /**
- * 4a Hairline stock header: sleeve position + prev/next, big ticker, then four
+ * 4a Hairline stock header: sleeve position + prev/next, big ticker, then three
  * rule-topped figures. Replaces the old "Company header" panel and the five-up
- * "Verdict strip" on /stock/[symbol].
+ * "Verdict strip" on /stock/[symbol]. The fair-value range stays with the
+ * models further down the page.
  */
 export function StockHero({
   symbol,
@@ -19,8 +20,6 @@ export function StockHero({
   expectedCagr,
   hurdle,
   horizonYears,
-  valueLow,
-  valueHigh,
   requiredExitMultiple,
   totalReturn,
   userExitPe,
@@ -38,10 +37,6 @@ export function StockHero({
   expectedCagr: number | null;
   hurdle: number;
   horizonYears: number;
-  valueLow: number | null;
-  valueHigh: number | null;
-  /** Kept for callers; the range note now reads price against low/high directly. */
-  upside?: number;
   requiredExitMultiple: number | null;
   /** Total (not annualized) return to the horizon; shown when the horizon is under two years. */
   totalReturn?: number | null;
@@ -62,22 +57,7 @@ export function StockHero({
   const q = sleeve ? `?sleeve=${sleeve.key}` : '';
 
   const shortName = companyName.replace(/,?\s+(Inc\.?|Corp\.?|Corporation|Ltd\.?|plc|N\.V\.)$/i, '');
-  // Where the price sits against the modelled range. Inside it is neither cheap nor dear.
-  const valueNote =
-    valueLow === null || valueHigh === null
-      ? 'No growth model applies'
-      : price < valueLow
-        ? 'Below the range'
-        : price > valueHigh
-          ? 'Above the range'
-          : 'Inside the range';
-  const valueTone = valueNote === 'Below the range' ? 'text-up' : valueNote === 'Above the range' ? 'text-dn' : 'text-t1';
   const horizon = Number.isInteger(horizonYears) ? `${horizonYears}Y` : `${horizonYears.toFixed(1)}-year`;
-
-  const range =
-    valueLow !== null && valueHigh !== null
-      ? `${roundMoney(valueLow, currency).replace(/^\$/, '')}–${roundMoney(valueHigh, currency).replace(/^\$/, '')}`
-      : '—';
 
   return (
     <section className="space-y-9">
@@ -105,7 +85,7 @@ export function StockHero({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-x-6 gap-y-8 md:grid-cols-4 md:gap-10">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-8 md:grid-cols-3 md:gap-10">
         <div className="hero-stat hero-stat-lead">
           <span className="hero-label">Expected {horizon} return</span>
           <span className={`hero-value ${expectedCagr !== null ? toneClass(expectedCagr - hurdle) : ''}`}>
@@ -127,11 +107,6 @@ export function StockHero({
             {change >= 0 ? '+' : ''}
             {num(change)} ({signedPct(changePercentage / 100)})
           </span>
-        </div>
-        <div className="hero-stat">
-          <span className="hero-label">Fair value</span>
-          <span className="hero-value">{range}</span>
-          <span className={`hero-sub ${valueTone}`}>{valueNote}</span>
         </div>
         <div className="hero-stat">
           <span className="hero-label">Must believe</span>

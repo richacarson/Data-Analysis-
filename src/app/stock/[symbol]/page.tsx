@@ -134,9 +134,6 @@ export default async function StockPage({
             ? Math.pow(1 + report.expectedReturn.result.totalCagr, report.expectedReturn.yearsToHorizon) - 1
             : null
         }
-        valueLow={report.valueRange.low}
-        valueHigh={report.valueRange.high}
-        upside={report.upside}
         requiredExitMultiple={report.expectedReturn.requiredExitMultiple}
       />
 
