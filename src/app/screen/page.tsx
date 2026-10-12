@@ -102,25 +102,9 @@ export default async function ScreenPage({
       if (f.pe === null) losses += 1;
       else pes.push({ pe: f.pe, w: weightOf(r.symbol) });
     }
-    // Weighted median: the P/E with half the sleeve's weight above it and half
-    // below (the plain median when the view is equal-weighted).
-    const sorted = [...pes].sort((a, b) => a.pe - b.pe);
     const w = pes.reduce((t, p) => t + p.w, 0);
-    let med: number | null = null;
-    let running = 0;
-    for (let i = 0; i < sorted.length && w > 0; i++) {
-      running += sorted[i].w;
-      if (running > w / 2 + 1e-9) {
-        med = sorted[i].pe;
-        break;
-      }
-      if (Math.abs(running - w / 2) <= 1e-9) {
-        med = (sorted[i].pe + (sorted[i + 1]?.pe ?? sorted[i].pe)) / 2;
-        break;
-      }
-    }
     const inverse = pes.reduce((t, p) => t + p.w / p.pe, 0);
-    return { year, median: med, average: w > 0 && inverse > 0 ? w / inverse : null, count: pes.length, losses };
+    return { year, average: w > 0 && inverse > 0 ? w / inverse : null, count: pes.length, losses };
   });
 
   return (
@@ -231,19 +215,8 @@ export default async function ScreenPage({
         {forwardPe.map((f) => (
           <Stat
             key={f.year}
-            label={`FY${f.year} P/E`}
-            value={
-              <span className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-                <span>
-                  {f.median !== null ? `${f.median.toFixed(1)}×` : '—'}
-                  <span className="ml-1 text-[11px] font-normal text-t3">{weightSet ? 'wtd median' : 'median'}</span>
-                </span>
-                <span>
-                  {f.average !== null ? `${f.average.toFixed(1)}×` : '—'}
-                  <span className="ml-1 text-[11px] font-normal text-t3">{weightSet ? 'wtd avg' : 'avg'}</span>
-                </span>
-              </span>
-            }
+            label={`FY${f.year} P/E · ${weightSet ? 'weighted avg' : 'average'}`}
+            value={f.average !== null ? `${f.average.toFixed(1)}×` : '—'}
             sub={
               f.count
                 ? `${f.count} with consensus${f.losses ? ` · ${f.losses} at a loss` : ''}`
