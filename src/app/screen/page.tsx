@@ -5,6 +5,7 @@ import { DEFAULT_HURDLE } from '@/lib/valuation/build';
 import { getWatchlistSymbols } from '@/lib/watchlist';
 import { sleeveMarketLink } from '@/lib/valuation/market';
 import { getWeightBook } from '@/lib/sleeves/weights';
+import { forwardPeYears } from '@/lib/valuation/house';
 import { Panel, Stat } from '@/components/ui';
 import { ScreenTable } from '@/components/ScreenTable';
 
@@ -85,6 +86,29 @@ export default async function ScreenPage({
           Math.floor(scored.length / 2)
         ].expectedCagr
       : null;
+
+  /*
+   * The sleeve's forward P/E by fiscal year. The average is harmonic (total
+   * price over total earnings, by weight), the way index P/Es are built: a
+   * plain mean of P/Es lets one 90x name pull the figure far off what the
+   * sleeve pays for its earnings. Loss years have no P/E and are counted aside.
+   */
+  const forwardPe = forwardPeYears(new Date()).map((year) => {
+    const pes: Array<{ pe: number; w: number }> = [];
+    let losses = 0;
+    for (const r of rows) {
+      const f = r.forwardPe?.find((p) => p.fiscalYear === year);
+      if (!f || f.eps === null) continue;
+      if (f.pe === null) losses += 1;
+      else pes.push({ pe: f.pe, w: weightOf(r.symbol) });
+    }
+    const sorted = pes.map((p) => p.pe).sort((a, b) => a - b);
+    const mid = sorted.length / 2;
+    const med = sorted.length ? (sorted.length % 2 ? sorted[Math.floor(mid)] : (sorted[mid - 1] + sorted[mid]) / 2) : null;
+    const w = pes.reduce((t, p) => t + p.w, 0);
+    const inverse = pes.reduce((t, p) => t + p.w / p.pe, 0);
+    return { year, median: med, average: w > 0 && inverse > 0 ? w / inverse : null, count: pes.length, losses };
+  });
 
   return (
     <div className="space-y-4">
@@ -188,6 +212,23 @@ export default async function ScreenPage({
               : 'No consensus, price or usable multiple'
           }
         />
+      </div>
+
+      <div className="panel stat-grid grid-cols-2 md:grid-cols-4">
+        {forwardPe.map((f) => (
+          <Stat
+            key={f.year}
+            label={`FY${f.year} P/E · median`}
+            value={f.median !== null ? `${f.median.toFixed(1)}×` : '—'}
+            sub={
+              f.count
+                ? `${weightSet ? 'Weighted average' : 'Average'} ${f.average !== null ? `${f.average.toFixed(1)}×` : '—'} · ${f.count} with consensus${
+                    f.losses ? ` · ${f.losses} at a loss` : ''
+                  }`
+                : 'No consensus this far out'
+            }
+          />
+        ))}
       </div>
 
       <Panel

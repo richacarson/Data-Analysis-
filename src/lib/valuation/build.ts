@@ -709,6 +709,8 @@ export async function buildValuation(symbol: string, overrides: ValuationOverrid
       exitPeOverridden: overrides.exitPe !== undefined,
       exitCapNote: house.exitCapNote,
       growthCapped: house.growthCapped,
+      /** Price over consensus EPS for the next four fiscal years. */
+      forwardPe: houseUsable ? house.forwardPe : [],
       anchors: house.anchors.anchors,
       peBasis: house.peBasis,
       basis: house.basis,

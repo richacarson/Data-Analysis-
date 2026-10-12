@@ -128,6 +128,7 @@ export default async function StockPage({
         horizonYears={Number(report.expectedReturn.yearsToHorizon.toFixed(1))}
         userExitPe={report.expectedReturn.exitPeOverridden ? report.expectedReturn.exitPe : null}
         upperBound={report.expectedReturn.growthCapped}
+        forwardPe={report.expectedReturn.forwardPe}
         totalReturn={
           report.expectedReturn.result
             ? Math.pow(1 + report.expectedReturn.result.totalCagr, report.expectedReturn.yearsToHorizon) - 1

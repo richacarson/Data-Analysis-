@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { houseReturn, type HouseInputs } from '../house';
+import { forwardPeYears, forwardPes, houseReturn, type HouseInputs } from '../house';
 
 const today = new Date('2026-09-25T00:00:00Z');
 
@@ -196,5 +196,23 @@ describe('houseReturn', () => {
     // Base consensus grows 10% a year; today's 12x sits below its 20x history.
     expect(r.growthCapped).toBe(false);
     expect(r.exitPe!).toBeGreaterThan(60 / 5);
+  });
+});
+
+describe('forwardPes', () => {
+  const label = (d: string) => d.slice(0, 4);
+  const est = (date: string, epsAvg: number, n = 10) => ({ date, epsAvg, epsLow: epsAvg, epsHigh: epsAvg, numAnalystsEps: n });
+
+  it('names the next four years from today', () => {
+    expect(forwardPeYears(new Date('2026-10-12T00:00:00Z'))).toEqual(['2027', '2028', '2029', '2030']);
+  });
+
+  it('divides price by each year’s consensus, in the quote currency', () => {
+    const rows = forwardPes(100, [est('2027-12-31', 5), est('2028-12-31', -1), est('2029-12-31', 10, 2)], label, 2, ['2027', '2028', '2029', '2030']);
+    expect(rows[0]).toEqual({ fiscalYear: '2027', pe: 10, eps: 10, analysts: 10 });
+    expect(rows[1].pe).toBeNull();
+    expect(rows[1].eps).toBe(-2);
+    expect(rows[2]).toMatchObject({ pe: 5, analysts: 2 });
+    expect(rows[3]).toEqual({ fiscalYear: '2030', pe: null, eps: null, analysts: 0 });
   });
 });

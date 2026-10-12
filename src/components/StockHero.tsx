@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { sleeveByKey, sleevesHolding } from '@/data/sleeves';
 import { multiple, num, pct, roundMoney, signedPct, toneClass } from '@/lib/format';
+import type { ForwardPe } from '@/lib/valuation/house';
 
 /**
  * 4a Hairline stock header: sleeve position + prev/next, big ticker, then four
@@ -24,6 +25,7 @@ export function StockHero({
   totalReturn,
   userExitPe,
   upperBound,
+  forwardPe = [],
 }: {
   symbol: string;
   companyName: string;
@@ -47,6 +49,8 @@ export function StockHero({
   userExitPe?: number | null;
   /** Fast grower capped at today's multiple: the return is a ceiling, not an estimate. */
   upperBound?: boolean;
+  /** Price over consensus EPS, next four fiscal years. */
+  forwardPe?: ForwardPe[];
 }) {
   const sym = symbol.toUpperCase();
   const sleeve =
@@ -135,6 +139,30 @@ export function StockHero({
           <span className="hero-sub">Exit multiple for {pct(hurdle, 0)}</span>
         </div>
       </div>
+
+      {forwardPe.length > 0 && (
+        <div className="border-t border-line pt-4">
+          <span className="text-[13px] text-t3">Forward P/E · price over consensus EPS</span>
+          <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4 md:gap-10">
+            {forwardPe.map((f) => {
+              const thin = f.analysts > 0 && f.analysts < 3;
+              return (
+                <div key={f.fiscalYear} className="flex flex-col gap-0.5">
+                  <dt className="text-[12px] text-t3">FY{f.fiscalYear}</dt>
+                  <dd className={`tabular text-[24px] font-light leading-none tracking-[-0.02em] ${f.pe === null || thin ? 'text-t3' : 'text-t1'}`}>
+                    {f.pe !== null ? `${multiple(f.pe, 1)}×` : f.eps !== null ? 'n/m' : '—'}
+                  </dd>
+                  <dd className="text-[11px] text-t4">
+                    {f.eps === null
+                      ? 'No consensus'
+                      : `EPS ${num(f.eps)} · ${f.analysts} analyst${f.analysts === 1 ? '' : 's'}`}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
+        </div>
+      )}
     </section>
   );
 }

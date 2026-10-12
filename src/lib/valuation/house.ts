@@ -101,6 +101,42 @@ export interface HouseResult {
   scenarios: ReturnType<typeof scenarioGrid> | null;
   /** Set when the output is implausible; the row is held rather than ranked. */
   review: string | null;
+  /** Price over consensus EPS for each of the next four fiscal years. */
+  forwardPe: ForwardPe[];
+}
+
+export interface ForwardPe {
+  fiscalYear: string;
+  /** Null where there is no consensus for the year or it is a loss. */
+  pe: number | null;
+  /** Consensus EPS in the quote currency. */
+  eps: number | null;
+  analysts: number;
+}
+
+/** The fiscal years shown as forward P/Es: next calendar year and the three after it. */
+export function forwardPeYears(today: Date): string[] {
+  const first = today.getUTCFullYear() + 1;
+  return [0, 1, 2, 3].map((k) => String(first + k));
+}
+
+/**
+ * Today's price over each year's consensus EPS, by the company's own fiscal
+ * year. Consensus only: an extended year is the model's, not the analysts'.
+ */
+export function forwardPes(
+  price: number,
+  forward: HouseEstimate[],
+  fiscalYearOf: (date: string) => string,
+  fxRate: number,
+  years: string[],
+): ForwardPe[] {
+  return years.map((fiscalYear) => {
+    const e = forward.find((f) => fiscalYearOf(f.date) === fiscalYear);
+    if (!e) return { fiscalYear, pe: null, eps: null, analysts: 0 };
+    const eps = e.epsAvg * fxRate;
+    return { fiscalYear, pe: eps > 0 && price > 0 ? price / eps : null, eps, analysts: e.numAnalystsEps };
+  });
 }
 
 /** Growth used to extend consensus past its last well-covered year, bounded both ways. */
@@ -396,5 +432,6 @@ export function houseReturn(input: HouseInputs): HouseResult {
     requiredExitMultiple: required,
     scenarios,
     review: review ? `Held for review: ${review}` : null,
+    forwardPe: forwardPes(input.price, input.forward, fiscalYearOf, input.fxRate, forwardPeYears(today)),
   };
 }

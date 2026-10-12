@@ -14,7 +14,7 @@ import {
 } from '../fmp/endpoints';
 import { forwardDividend } from '../valuation/dividends';
 import { forwardEstimates } from '../valuation/fiscal';
-import { houseReturn } from '../valuation/house';
+import { houseReturn, type ForwardPe } from '../valuation/house';
 import { peerPes } from '../valuation/peers';
 import { marketLinks } from '../valuation/market';
 import { listingIssue } from '../valuation/applicability';
@@ -58,6 +58,8 @@ export interface ScreenRow {
   review?: string;
   /** Reporting currency, where it differs from the dollar quote. */
   convertedFrom?: string;
+  /** Price over consensus EPS, next four fiscal years. */
+  forwardPe?: ForwardPe[];
   note?: string;
 }
 
@@ -213,6 +215,7 @@ export async function runScreen(
         beforeGrowthCap: house.beforeGrowthCap,
         epsGrowthToHorizon: house.epsGrowthToHorizon,
         convertedFrom: reported !== quote ? reported : undefined,
+        forwardPe: house.forwardPe,
       };
 
       if (house.epsAtHorizon === null) return { ...common, note: 'No positive consensus EPS at the horizon' };
