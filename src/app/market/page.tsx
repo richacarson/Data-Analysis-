@@ -163,38 +163,23 @@ export default async function MarketPage() {
         title="Is the market expensive?"
         subtitle={`Reported earnings, Shiller data through ${HISTORY_THROUGH ? monthLabel(HISTORY_THROUGH) : '—'}`}
       >
-        {latest.trailing || latest.cape ? (
+        {latest.trailing ? (
           <>
-            <div className="grid grid-cols-2 border-b border-line">
+            <div className="border-b border-line">
               <Stat
                 label="Trailing P/E today"
-                value={latest.trailing?.value ? `${latest.trailing.value.toFixed(1)}×` : '—'}
-                sub={latest.trailing ? `Last 4 reported quarters · ${pct(latest.trailing.coverage, 0)} of index value` : undefined}
-              />
-              <Stat
-                label="CAPE today"
-                value={latest.cape?.value ? `${latest.cape.value.toFixed(1)}×` : '—'}
-                sub={
-                  latest.cape
-                    ? `S&P ${Math.round(latest.cape.level).toLocaleString('en-US')} over 10 years of real index earnings`
-                    : undefined
-                }
+                value={latest.trailing.value ? `${latest.trailing.value.toFixed(1)}×` : '—'}
+                sub={`Last 4 reported quarters · ${pct(latest.trailing.coverage, 0)} of index value`}
               />
             </div>
-            <p className="eyebrow-muted px-4 pt-3">Trailing P/E</p>
-            <HistoryTable metric="trailing" today={latest.trailing?.value ?? null} />
-            <p className="eyebrow-muted border-t border-line px-4 pt-3">CAPE (Shiller P/E)</p>
-            <HistoryTable metric="cape" today={latest.cape?.value ?? null} />
+            <HistoryTable metric="trailing" today={latest.trailing.value ?? null} />
           </>
         ) : (
-          <p className="px-4 py-3 text-[12px] text-t3">Trailing P/E and CAPE start with the next evening&rsquo;s reading.</p>
+          <p className="px-4 py-3 text-[12px] text-t3">The trailing P/E starts with the next evening&rsquo;s reading.</p>
         )}
         <p className="border-t border-line px-4 py-3 text-[11px] leading-relaxed text-t4">
           Today&rsquo;s figures are built from the members&rsquo; own reported earnings, weighted by market value, with
-          losses netted in, as the index&rsquo;s reported earnings are. CAPE is figured at index level, as Shiller
-          does: the index over ten years of its own earnings in today&rsquo;s dollars (CPI from FRED), his series to{' '}
-          {HISTORY_THROUGH ? monthLabel(HISTORY_THROUGH) : 'the end of his data'}, today&rsquo;s implied by the trailing
-          P/E, and a straight line between. History: {HISTORY_SOURCE}. Green means cheaper than the
+          losses netted in, as the index&rsquo;s reported earnings are. History: {HISTORY_SOURCE}. Green means cheaper than the
           average, red dearer.
         </p>
       </Panel>

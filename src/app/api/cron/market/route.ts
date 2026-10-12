@@ -43,7 +43,6 @@ export async function GET(request: NextRequest) {
     used: snapshot.used,
     years: snapshot.years.map((y) => ({ year: y.year, pe: y.pe && Number(y.pe.toFixed(2)), growth: y.growth })),
     trailing: snapshot.trailing,
-    cape: snapshot.cape,
     expected: snapshot.expected,
     seconds: Math.round((Date.now() - started) / 1000),
   });

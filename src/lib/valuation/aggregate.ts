@@ -135,7 +135,7 @@ export interface TotalMultiple {
 /**
  * Value over earnings with losses netted in, the way an index's reported
  * earnings are: Shiller's S&P 500 earnings are the members' profits less
- * their losses. Used for the trailing P/E and CAPE that are set against his
+ * their losses. Used for the trailing P/E that is set against his
  * history; the forward P/E leaves loss years out instead.
  */
 export function totalMultiple(items: Array<{ weight: number; price: number; perShare: number | null }>): TotalMultiple {

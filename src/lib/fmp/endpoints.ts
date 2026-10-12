@@ -175,10 +175,6 @@ export const getBatchQuotes = (symbols: string[]) =>
 export const getMarketQuotes = (symbols: string[]) =>
   fmpList<MarketQuote>('batch-quote', { symbols: symbols.join(',') }, TTL.profile);
 
-/** An index level, e.g. ^GSPC for the S&P 500. */
-export const getIndexQuote = (symbol: string) =>
-  fmpList<{ symbol: string; price: number }>('quote', { symbol }, TTL.profile).then((r) => r[0] ?? null);
-
 /** Today's S&P 500 members, with sector and CIK (share classes share a CIK). */
 export const getSp500Constituents = () => fmpList<IndexConstituent>('sp500-constituent', {}, TTL.statements);
 

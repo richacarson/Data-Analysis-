@@ -2,7 +2,6 @@ import 'server-only';
 
 import {
   getEstimates,
-  getIndexQuote,
   getMarketQuotes,
   getRatiosTTM,
   getSp500Constituents,
@@ -20,8 +19,6 @@ import {
 } from '../valuation/aggregate';
 import { DEFAULT_HURDLE } from '../valuation/build';
 import { forwardPeYears } from '../valuation/house';
-import { getCpi } from './cpi';
-import { indexCape } from './history';
 
 /**
  * The S&P 500 built bottom-up from its members' consensus, the way FactSet and
@@ -58,8 +55,6 @@ export interface MarketSnapshot {
   ntmPe?: number | null;
   /** Price over the last four reported quarters' earnings, losses netted in. */
   trailing?: TotalMultiple;
-  /** Price over ten years of inflation-adjusted reported earnings, at index level. */
-  cape?: { value: number | null; level: number; earnings: number };
   /** The house 3-year expected return across the members, by market value. */
   expected?: ReturnSummary & { hurdle: number };
 }
@@ -100,8 +95,6 @@ export async function buildSp500Snapshot(deadline: number, today = new Date()): 
   const shown = forwardPeYears(today);
   // The year before the first shown, so the first year has a growth rate.
   const years = [String(Number(shown[0]) - 1), ...shown];
-  // Without CPI or the index level only CAPE is lost; the rest stands.
-  const [cpi, spx] = await Promise.all([getCpi().catch(() => null), getIndexQuote('^GSPC').catch(() => null)]);
   let late = false;
   const members = await pooled([...byCompany.values()], 8, async (m): Promise<Member | null> => {
     if (Date.now() > deadline) {
@@ -169,19 +162,6 @@ export async function buildSp500Snapshot(deadline: number, today = new Date()): 
       .map((sector) => ({ sector, ...summary(priced.filter((m) => m.sector === sector)) }))
       .sort((a, b) => b.share - a.share),
     trailing,
-    cape:
-      cpi && spx?.price && trailing.value
-        ? {
-            level: spx.price,
-            earnings: spx.price / trailing.value,
-            value: indexCape({
-              level: spx.price,
-              earnings: spx.price / trailing.value,
-              month: today.toISOString().slice(0, 7),
-              cpi: (month) => cpi.at(`${month}-01`),
-            }),
-          }
-        : undefined,
     expected: {
       ...returnSummary(
         priced.map((m) => ({ weight: m.weight, cagr: cagrOf.get(m.symbol) ?? null })),
