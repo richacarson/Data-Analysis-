@@ -2,7 +2,7 @@ import 'server-only';
 
 import {
   getEstimates,
-  getIncomeStatements,
+  getIndexQuote,
   getMarketQuotes,
   getRatiosTTM,
   getSp500Constituents,
@@ -20,7 +20,8 @@ import {
 } from '../valuation/aggregate';
 import { DEFAULT_HURDLE } from '../valuation/build';
 import { forwardPeYears } from '../valuation/house';
-import { getCpi, type CpiIndex } from './cpi';
+import { getCpi } from './cpi';
+import { indexCape } from './history';
 
 /**
  * The S&P 500 built bottom-up from its members' consensus, the way FactSet and
@@ -57,8 +58,8 @@ export interface MarketSnapshot {
   ntmPe?: number | null;
   /** Price over the last four reported quarters' earnings, losses netted in. */
   trailing?: TotalMultiple;
-  /** Price over ten years of inflation-adjusted reported earnings. */
-  cape?: TotalMultiple;
+  /** Price over ten years of inflation-adjusted reported earnings, at index level. */
+  cape?: { value: number | null; level: number; earnings: number };
   /** The house 3-year expected return across the members, by market value. */
   expected?: ReturnSummary & { hurdle: number };
 }
@@ -69,23 +70,6 @@ interface Member extends BasketHolding {
   sector: string;
   /** Reported (GAAP) EPS over the last twelve months. */
   trailingEps: number | null;
-  /** Ten-year average reported EPS in today's dollars. */
-  realEps10: number | null;
-}
-
-/** Fewest annual reports a ten-year average is taken over. */
-const MIN_CAPE_YEARS = 7;
-
-function tenYearRealEps(rows: Array<{ date: string; epsDiluted: number }>, cpi: CpiIndex): number | null {
-  const years = [...rows]
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 10)
-    .map((r) => {
-      const then = cpi.at(r.date);
-      return then && Number.isFinite(r.epsDiluted) ? (r.epsDiluted * cpi.latest) / then : null;
-    })
-    .filter((v): v is number => v !== null);
-  return years.length >= MIN_CAPE_YEARS ? years.reduce((t, v) => t + v, 0) / years.length : null;
 }
 
 /**
@@ -116,8 +100,8 @@ export async function buildSp500Snapshot(deadline: number, today = new Date()): 
   const shown = forwardPeYears(today);
   // The year before the first shown, so the first year has a growth rate.
   const years = [String(Number(shown[0]) - 1), ...shown];
-  // Without CPI only CAPE is lost; the rest of the snapshot stands.
-  const cpi = await getCpi().catch(() => null);
+  // Without CPI or the index level only CAPE is lost; the rest stands.
+  const [cpi, spx] = await Promise.all([getCpi().catch(() => null), getIndexQuote('^GSPC').catch(() => null)]);
   let late = false;
   const members = await pooled([...byCompany.values()], 8, async (m): Promise<Member | null> => {
     if (Date.now() > deadline) {
@@ -126,17 +110,12 @@ export async function buildSp500Snapshot(deadline: number, today = new Date()): 
     }
     const q = quotes.get(m.symbol);
     if (!q || !(q.price > 0) || !(q.marketCap > 0)) return null;
-    const [estimates, ratios, annual] = await Promise.all([
+    const [estimates, ratios] = await Promise.all([
       getEstimates(m.symbol, 'annual', 10).catch(() => []),
       getRatiosTTM(m.symbol).catch(() => null),
-      getIncomeStatements(m.symbol, 'annual', 10).catch(() => []),
     ]);
-    // Reported figures in another currency would need converting; none of
-    // the index reports outside dollars today, so such a member is left out.
-    const dollars = annual.every((r) => !r.reportedCurrency || r.reportedCurrency.toUpperCase() === 'USD');
     return {
-      trailingEps: dollars && ratios && Number.isFinite(ratios.netIncomePerShareTTM) ? ratios.netIncomePerShareTTM : null,
-      realEps10: dollars && cpi ? tenYearRealEps(annual, cpi) : null,
+      trailingEps: ratios && Number.isFinite(ratios.netIncomePerShareTTM) ? ratios.netIncomePerShareTTM : null,
       symbol: m.symbol,
       sector: m.sector || 'Other',
       weight: q.marketCap,
@@ -170,6 +149,7 @@ export async function buildSp500Snapshot(deadline: number, today = new Date()): 
   const top = ranked.slice(0, SP500_TOP);
   const sectorNames = [...new Set(priced.map((m) => m.sector))];
 
+  const trailing = totalMultiple(priced.map((m) => ({ weight: m.weight, price: m.price, perShare: m.trailingEps })));
   const all = basketYears(priced, years);
   const [current, next] = all;
   const yearStart = Date.UTC(today.getUTCFullYear(), 0, 1);
@@ -188,8 +168,20 @@ export async function buildSp500Snapshot(deadline: number, today = new Date()): 
     sectors: sectorNames
       .map((sector) => ({ sector, ...summary(priced.filter((m) => m.sector === sector)) }))
       .sort((a, b) => b.share - a.share),
-    trailing: totalMultiple(priced.map((m) => ({ weight: m.weight, price: m.price, perShare: m.trailingEps }))),
-    cape: cpi ? totalMultiple(priced.map((m) => ({ weight: m.weight, price: m.price, perShare: m.realEps10 }))) : undefined,
+    trailing,
+    cape:
+      cpi && spx?.price && trailing.value
+        ? {
+            level: spx.price,
+            earnings: spx.price / trailing.value,
+            value: indexCape({
+              level: spx.price,
+              earnings: spx.price / trailing.value,
+              month: today.toISOString().slice(0, 7),
+              cpi: (month) => cpi.at(`${month}-01`),
+            }),
+          }
+        : undefined,
     expected: {
       ...returnSummary(
         priced.map((m) => ({ weight: m.weight, cagr: cagrOf.get(m.symbol) ?? null })),

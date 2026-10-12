@@ -174,7 +174,11 @@ export default async function MarketPage() {
               <Stat
                 label="CAPE today"
                 value={latest.cape?.value ? `${latest.cape.value.toFixed(1)}×` : '—'}
-                sub={latest.cape ? `10-year real earnings · ${pct(latest.cape.coverage, 0)} of index value` : undefined}
+                sub={
+                  latest.cape
+                    ? `S&P ${Math.round(latest.cape.level).toLocaleString('en-US')} over 10 years of real index earnings`
+                    : undefined
+                }
               />
             </div>
             <p className="eyebrow-muted px-4 pt-3">Trailing P/E</p>
@@ -187,8 +191,10 @@ export default async function MarketPage() {
         )}
         <p className="border-t border-line px-4 py-3 text-[11px] leading-relaxed text-t4">
           Today&rsquo;s figures are built from the members&rsquo; own reported earnings, weighted by market value, with
-          losses netted in, as the index&rsquo;s reported earnings are; CAPE uses each member&rsquo;s last ten annual
-          reports in today&rsquo;s dollars (CPI from FRED). History: {HISTORY_SOURCE}. Green means cheaper than the
+          losses netted in, as the index&rsquo;s reported earnings are. CAPE is figured at index level, as Shiller
+          does: the index over ten years of its own earnings in today&rsquo;s dollars (CPI from FRED), his series to{' '}
+          {HISTORY_THROUGH ? monthLabel(HISTORY_THROUGH) : 'the end of his data'}, today&rsquo;s implied by the trailing
+          P/E, and a straight line between. History: {HISTORY_SOURCE}. Green means cheaper than the
           average, red dearer.
         </p>
       </Panel>
