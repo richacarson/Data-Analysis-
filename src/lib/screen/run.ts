@@ -60,6 +60,8 @@ export interface ScreenRow {
   convertedFrom?: string;
   /** Price over consensus EPS, next four fiscal years. */
   forwardPe?: ForwardPe[];
+  /** Current fiscal year's consensus, the base for the first year's growth. */
+  forwardPeBase?: ForwardPe | null;
   note?: string;
 }
 
@@ -216,6 +218,7 @@ export async function runScreen(
         epsGrowthToHorizon: house.epsGrowthToHorizon,
         convertedFrom: reported !== quote ? reported : undefined,
         forwardPe: house.forwardPe,
+        forwardPeBase: house.forwardPeBase,
       };
 
       if (house.epsAtHorizon === null) return { ...common, note: 'No positive consensus EPS at the horizon' };

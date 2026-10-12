@@ -103,6 +103,8 @@ export interface HouseResult {
   review: string | null;
   /** Price over consensus EPS for each of the next four fiscal years. */
   forwardPe: ForwardPe[];
+  /** The same for the year before them, the base for the first year's growth. */
+  forwardPeBase: ForwardPe | null;
 }
 
 export interface ForwardPe {
@@ -433,5 +435,7 @@ export function houseReturn(input: HouseInputs): HouseResult {
     scenarios,
     review: review ? `Held for review: ${review}` : null,
     forwardPe: forwardPes(input.price, input.forward, fiscalYearOf, input.fxRate, forwardPeYears(today)),
+    forwardPeBase:
+      forwardPes(input.price, input.forward, fiscalYearOf, input.fxRate, [String(today.getUTCFullYear())])[0] ?? null,
   };
 }

@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/cron/estimates", "schedule": "20 22 * * *" },
-    { "path": "/api/cron/warm", "schedule": "40 12 * * *" }
+    { "path": "/api/cron/warm", "schedule": "40 12 * * *" },
+    { "path": "/api/cron/market", "schedule": "50 22 * * *" }
   ]
 }

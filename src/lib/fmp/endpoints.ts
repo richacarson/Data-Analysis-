@@ -10,6 +10,8 @@ import type {
   EnterpriseValue,
   FinancialEstimate,
   FinancialScores,
+  IndexConstituent,
+  MarketQuote,
   IncomeStatement,
   KeyMetricsTTM,
   IndustryPe,
@@ -168,6 +170,13 @@ export async function getConversion(
 /** Prices for many symbols in one request, so a screen is not N calls. */
 export const getBatchQuotes = (symbols: string[]) =>
   fmpList<BatchQuote>('batch-quote-short', { symbols: symbols.join(',') }, TTL.quote);
+
+/** Price and market value for many symbols in one request. */
+export const getMarketQuotes = (symbols: string[]) =>
+  fmpList<MarketQuote>('batch-quote', { symbols: symbols.join(',') }, TTL.profile);
+
+/** Today's S&P 500 members, with sector and CIK (share classes share a CIK). */
+export const getSp500Constituents = () => fmpList<IndexConstituent>('sp500-constituent', {}, TTL.statements);
 
 /**
  * Symbol lookup. FMP splits this across two endpoints: `search-symbol` matches

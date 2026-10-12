@@ -274,6 +274,21 @@ export interface BatchQuote {
   volume: number;
 }
 
+export interface MarketQuote {
+  symbol: string;
+  price: number;
+  marketCap: number;
+}
+
+export interface IndexConstituent {
+  symbol: string;
+  name: string;
+  sector: string;
+  subSector: string;
+  cik: string;
+  dateFirstAdded: string;
+}
+
 /** Segment labels change as companies re-cut their reporting, so `data` is open. */
 export interface RevenueSegment {
   symbol: string;

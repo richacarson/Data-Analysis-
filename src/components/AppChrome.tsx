@@ -14,6 +14,7 @@ function isAuthPage(pathname: string) {
 const NAV = [
   { href: '/', label: 'Sleeves', match: (p: string) => p === '/' || p.startsWith('/stock') },
   { href: '/screen', label: 'Screen', match: (p: string) => p.startsWith('/screen') },
+  { href: '/market', label: 'Market', match: (p: string) => p.startsWith('/market') },
   { href: '/account', label: 'Account', match: (p: string) => p.startsWith('/account') },
 ];
 
@@ -34,7 +35,7 @@ export function AppHeader() {
         {!auth && (
           <>
             <nav className="hidden shrink-0 items-center gap-7 md:flex" aria-label="Main">
-              {NAV.slice(0, 2).map((item) => (
+              {NAV.filter((item) => item.href !== '/account').map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
@@ -69,7 +70,7 @@ export function MobileTabBar() {
       aria-label="Main"
       className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
     >
-      <div className="grid grid-cols-3">
+      <div className="grid grid-cols-4">
         {NAV.map((item) => {
           const active = item.match(pathname);
           return (

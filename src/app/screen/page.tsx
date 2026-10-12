@@ -6,6 +6,8 @@ import { getWatchlistSymbols } from '@/lib/watchlist';
 import { sleeveMarketLink } from '@/lib/valuation/market';
 import { getWeightBook } from '@/lib/sleeves/weights';
 import { forwardPeYears } from '@/lib/valuation/house';
+import { basketYears } from '@/lib/valuation/aggregate';
+import { latestMarketSnapshot } from '@/lib/market/store';
 import { Panel, Stat } from '@/components/ui';
 import { ScreenTable } from '@/components/ScreenTable';
 
@@ -27,7 +29,11 @@ export default async function ScreenPage({
   searchParams: Promise<{ sleeve?: string; hurdle?: string }>;
 }) {
   const { sleeve: sleeveKey, hurdle: hurdleParam } = await searchParams;
-  const [watchlist, book] = await Promise.all([getWatchlistSymbols(), getWeightBook()]);
+  const [watchlist, book, market] = await Promise.all([
+    getWatchlistSymbols(),
+    getWeightBook(),
+    latestMarketSnapshot().catch(() => null),
+  ]);
   const onWatchlist = sleeveKey === 'watchlist';
   // A sleeve in the code, or one defined only by its weights (post-rebalance).
   const sleeve =
@@ -88,24 +94,28 @@ export default async function ScreenPage({
       : null;
 
   /*
-   * The sleeve's forward P/E by fiscal year. The average is harmonic (total
-   * price over total earnings, by weight), the way index P/Es are built: a
-   * plain mean of P/Es lets one 90x name pull the figure far off what the
-   * sleeve pays for its earnings. Loss years have no P/E and are counted aside.
+   * The sleeve's forward P/E and earnings growth by fiscal year, built the way
+   * index P/Es are (total value over total earnings, by weight), beside the
+   * S&P 500's from the latest daily snapshot.
    */
-  const forwardPe = forwardPeYears(new Date()).map((year) => {
-    const pes: Array<{ pe: number; w: number }> = [];
-    let losses = 0;
-    for (const r of rows) {
-      const f = r.forwardPe?.find((p) => p.fiscalYear === year);
-      if (!f || f.eps === null) continue;
-      if (f.pe === null) losses += 1;
-      else pes.push({ pe: f.pe, w: weightOf(r.symbol) });
-    }
-    const w = pes.reduce((t, p) => t + p.w, 0);
-    const inverse = pes.reduce((t, p) => t + p.w / p.pe, 0);
-    return { year, average: w > 0 && inverse > 0 ? w / inverse : null, count: pes.length, losses };
-  });
+  const peYears = forwardPeYears(new Date());
+  const baseYear = String(Number(peYears[0]) - 1);
+  const forwardPe = basketYears(
+    rows
+      .filter((r) => r.price && r.forwardPe)
+      .map((r) => ({
+        symbol: r.symbol,
+        weight: weightOf(r.symbol),
+        price: r.price!,
+        eps: new Map(
+          [r.forwardPeBase, ...(r.forwardPe ?? [])]
+            .filter((f): f is NonNullable<typeof f> => !!f && f.eps !== null)
+            .map((f) => [f.fiscalYear, f.eps!]),
+        ),
+      })),
+    [baseYear, ...peYears],
+  ).slice(1);
+  const marketYear = (year: string) => market?.years.find((y) => y.year === year) ?? null;
 
   return (
     <div className="space-y-4">
@@ -212,18 +222,41 @@ export default async function ScreenPage({
       </div>
 
       <div className="panel stat-grid grid-cols-2 md:grid-cols-4">
-        {forwardPe.map((f) => (
-          <Stat
-            key={f.year}
-            label={`FY${f.year} P/E · ${weightSet ? 'weighted avg' : 'average'}`}
-            value={f.average !== null ? `${f.average.toFixed(1)}×` : '—'}
-            sub={
-              f.count
-                ? `${f.count} with consensus${f.losses ? ` · ${f.losses} at a loss` : ''}`
-                : 'No consensus this far out'
-            }
-          />
-        ))}
+        {forwardPe.map((f) => {
+          const m = marketYear(f.year);
+          const gap = f.pe && m?.pe ? f.pe / m.pe - 1 : null;
+          return (
+            <Stat
+              key={f.year}
+              label={`FY${f.year} P/E · ${weightSet ? 'weighted avg' : 'average'}`}
+              value={f.pe !== null ? `${f.pe.toFixed(1)}×` : '—'}
+              sub={
+                f.count ? (
+                  <>
+                    {m?.pe ? (
+                      <span className="block">
+                        S&amp;P 500 {m.pe.toFixed(1)}×
+                        {gap !== null ? ` · ${Math.abs(gap * 100).toFixed(0)}% ${gap < 0 ? 'below' : 'above'}` : ''}
+                      </span>
+                    ) : null}
+                    {f.growth !== null ? (
+                      <span className="block">
+                        EPS growth {f.growth >= 0 ? '+' : ''}
+                        {(f.growth * 100).toFixed(1)}%
+                        {m?.growth != null ? ` · S&P ${m.growth >= 0 ? '+' : ''}${(m.growth * 100).toFixed(1)}%` : ''}
+                      </span>
+                    ) : null}
+                    <span className="block">
+                      {f.count} with consensus{f.losses ? ` · ${f.losses} at a loss` : ''}
+                    </span>
+                  </>
+                ) : (
+                  'No consensus this far out'
+                )
+              }
+            />
+          );
+        })}
       </div>
 
       <Panel

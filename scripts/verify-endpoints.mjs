@@ -78,6 +78,16 @@ const CHECKS = [
     fields: ['symbol', 'companyName'],
   },
   {
+    endpoint: 'sp500-constituent',
+    params: {},
+    fields: ['symbol', 'sector', 'cik'],
+  },
+  {
+    endpoint: 'batch-quote',
+    params: { symbols: SYMBOL },
+    fields: ['symbol', 'price', 'marketCap'],
+  },
+  {
     endpoint: 'price-target-summary',
     params: { symbol: SYMBOL },
     fields: ['lastMonthCount', 'lastQuarterAvgPriceTarget', 'lastYearAvgPriceTarget'],

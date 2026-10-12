@@ -9,7 +9,7 @@ import type { SnapshotRow } from './revisions';
  * checks CRON_SECRET and can only insert snapshots. The service-role key would
  * also work, but it bypasses row-level security on every table in the project.
  */
-function writer() {
+export function writer() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const secret = process.env.CRON_SECRET;
