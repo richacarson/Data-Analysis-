@@ -38,7 +38,20 @@ export async function latestFiling(fund: EtfFund, fundName: string): Promise<Fil
   return { accession: top._id.split(':')[0], periodEnding: top._source.period_ending! };
 }
 
-const tag = (xml: string, name: string) => new RegExp(`<${name}>([^<]*)</${name}>`).exec(xml)?.[1]?.trim() ?? null;
+/** XML text with its five predefined entities decoded (S&amp;P → S&P). */
+export function xmlText(raw: string): string {
+  return raw
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+const tag = (xml: string, name: string) => {
+  const raw = new RegExp(`<${name}>([^<]*)</${name}>`).exec(xml)?.[1];
+  return raw === undefined ? null : xmlText(raw.trim());
+};
 
 export interface NportHolding extends EtfHolding {
   cusip: string | null;

@@ -51,4 +51,11 @@ describe('N-PORT holdings', () => {
     expect(r.asOf).toBe('2026-07-31');
     expect(r.holdings).toEqual([{ ticker: 'MO', name: 'Altria Group Inc', weight: 0.0231, cusip: '02209S103' }]);
   });
+
+  it('decodes entities, so S&amp;P matches S&P', async () => {
+    const { parseNport } = await import('../nport');
+    expect(parseNport('<seriesName>iShares Core S&amp;P U.S. Growth ETF</seriesName>').seriesName).toBe(
+      'iShares Core S&P U.S. Growth ETF',
+    );
+  });
 });
