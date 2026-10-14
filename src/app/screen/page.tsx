@@ -64,6 +64,11 @@ export default async function ScreenPage({
   };
   const totalWeight = rows.reduce((t, r) => t + weightOf(r.symbol), 0);
   const correlation = weightedMean((r) => r.correlation);
+  // Non-payers count at 0%; a row that failed to load has no yield to count.
+  const dividendYield = weightedMean((r) => (r.price ? r.dividendYield : null));
+  const priced = rows.filter((r) => r.price);
+  const equalYield = priced.length ? priced.reduce((t, r) => t + r.dividendYield, 0) / priced.length : null;
+  const payers = priced.filter((r) => r.dividendYield > 0).length;
   const correlationCount = rows.filter((r) => typeof r.correlation === 'number').length;
 
   const scored = rows.filter((r) => r.expectedCagr !== null);
@@ -171,7 +176,7 @@ export default async function ScreenPage({
         </div>
       </div>
 
-      <div className="panel stat-grid md:grid-cols-5">
+      <div className="panel stat-grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
         <Stat label={onWatchlist ? 'Names screened' : 'Holdings screened'} value={String(tickers.length)} sub={`${scored.length} with usable estimates`} />
         <Stat
           label={`Clear ${(hurdle * 100).toFixed(0)}%`}
@@ -215,6 +220,15 @@ export default async function ScreenPage({
               : correlationCount
                 ? `Average of ${correlationCount}, weekly returns over 3 years`
                 : undefined
+          }
+        />
+        <Stat
+          label={weightSet ? 'Weighted dividend yield' : 'Dividend yield'}
+          value={dividendYield ? `${(dividendYield.value * 100).toFixed(2)}%` : '—'}
+          sub={
+            dividendYield
+              ? `${weightSet && equalYield !== null ? `Equal-weighted ${(equalYield * 100).toFixed(2)}% · ` : weightSet ? '' : 'Equal-weighted · '}${payers} of ${priced.length} pay a dividend · forward`
+              : undefined
           }
         />
         <Stat
