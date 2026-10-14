@@ -20,7 +20,16 @@ export async function GET(request: NextRequest) {
   // Holdings first, then watchlist names and anything opened recently.
   const extra = await trackedSymbols().catch(() => []);
   const symbols = [...new Set([...ALL_SLEEVE_TICKERS, ...extra.map((s) => s.toUpperCase())])];
-  const rows = await runScreen(symbols);
+  // The holdings' correlations are warmed; the rest (ETF sleeves run to
+  // hundreds of names) skip three years of prices each, which the Screen
+  // does not use for them.
+  const deadline = Date.now() + 240_000;
+  const own = await runScreen(ALL_SLEEVE_TICKERS, { deadline });
+  const others = await runScreen(
+    symbols.filter((s) => !ALL_SLEEVE_TICKERS.includes(s)),
+    { deadline, correlation: false },
+  );
+  const rows = [...own, ...others];
   // ?report=growth-cap lists every name the fast-grower cap changed, before and after.
   if (request.nextUrl.searchParams.get('report') === 'growth-cap') {
     const changed = rows
@@ -42,7 +51,7 @@ export async function GET(request: NextRequest) {
   // follow-up pass picks up where this one stopped.
   const unfinished = rows.filter((r) => r.note?.startsWith('Still loading')).length;
   const pass = Number(request.nextUrl.searchParams.get('pass') ?? '1');
-  if (unfinished > 0 && pass < 4) {
+  if (unfinished > 0 && pass < 8) {
     const next = new URL(request.nextUrl);
     next.searchParams.set('pass', String(pass + 1));
     // Only the hand-off is awaited: the next pass runs in its own invocation

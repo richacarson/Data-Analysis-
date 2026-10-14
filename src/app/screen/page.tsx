@@ -3,7 +3,7 @@ import { runScreen } from '@/lib/screen/run';
 import { SLEEVES, sleeveByKey, ALL_SLEEVE_TICKERS } from '@/data/sleeves';
 import { DEFAULT_HURDLE } from '@/lib/valuation/build';
 import { getWatchlistSymbols } from '@/lib/watchlist';
-import { sleeveMarketLink } from '@/lib/valuation/market';
+import { marketLinks, sleeveMarketLink } from '@/lib/valuation/market';
 import { getWeightBook } from '@/lib/sleeves/weights';
 import { forwardPeYears } from '@/lib/valuation/house';
 import { basketYears } from '@/lib/valuation/aggregate';
@@ -45,10 +45,15 @@ export default async function ScreenPage({
   const parsedHurdle = hurdleParam ? Number(hurdleParam) : NaN;
   const hurdle = Number.isFinite(parsedHurdle) && parsedHurdle > 0 ? parsedHurdle : DEFAULT_HURDLE;
 
-  const screened = await runScreen(tickers, { hurdle });
+  // An ETF sleeve is hundreds of names: its correlation comes from the fund's
+  // own price rather than three years of prices for every holding.
+  const etf = sleeve && 'etf' in sleeve ? (sleeve.etf as string | undefined) : undefined;
+  const screened = await runScreen(tickers, { hurdle, correlation: !etf });
   const rows = weightSet ? screened.map((r) => ({ ...r, weight: weightOf(r.symbol) })) : screened;
   // The same cached price histories the rows used, combined into one portfolio.
-  const portfolio = await sleeveMarketLink(tickers, weightSet ? tickers.map(weightOf) : undefined).catch(() => null);
+  const portfolio = etf
+    ? ((await marketLinks(etf).catch(() => null))?.threeYear ?? null)
+    : await sleeveMarketLink(tickers, weightSet ? tickers.map(weightOf) : undefined).catch(() => null);
 
   /** Average of a field across rows that have it, by position weight (equal without weights). */
   const weightedMean = (pick: (r: (typeof rows)[number]) => number | null | undefined) => {
@@ -213,13 +218,17 @@ export default async function ScreenPage({
         />
         <Stat
           label="Correlation to S&P 500"
-          value={correlation ? correlation.value.toFixed(2) : '—'}
+          value={etf ? (portfolio ? portfolio.correlation.toFixed(2) : '—') : correlation ? correlation.value.toFixed(2) : '—'}
           sub={
-            portfolio
-              ? `${weightSet ? 'Weighted average' : 'Average'} of ${correlationCount} · as one portfolio ${portfolio.correlation.toFixed(2)}, beta ${portfolio.beta.toFixed(2)}`
-              : correlationCount
-                ? `Average of ${correlationCount}, weekly returns over 3 years`
+            etf
+              ? portfolio
+                ? `${etf} itself, weekly returns over 3 years · beta ${portfolio.beta.toFixed(2)}`
                 : undefined
+              : portfolio
+                ? `${weightSet ? 'Weighted average' : 'Average'} of ${correlationCount} · as one portfolio ${portfolio.correlation.toFixed(2)}, beta ${portfolio.beta.toFixed(2)}`
+                : correlationCount
+                  ? `Average of ${correlationCount}, weekly returns over 3 years`
+                  : undefined
           }
         />
         <Stat
