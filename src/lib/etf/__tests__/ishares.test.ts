@@ -39,3 +39,16 @@ describe('iShares holdings', () => {
     expect(() => parseHoldings('<!DOCTYPE html><html>')).toThrow();
   });
 });
+
+describe('N-PORT holdings', () => {
+  it('reads common-equity positions and their share of the fund', async () => {
+    const { parseNport } = await import('../nport');
+    const xml = `<genInfo><seriesName>iShares Select Dividend ETF</seriesName><repPdDate>2026-07-31</repPdDate></genInfo>
+<invstOrSec><name>Altria Group Inc</name><cusip>02209S103</cusip><identifiers><ticker value="MO"/></identifiers><pctVal>2.31</pctVal><assetCat>EC</assetCat></invstOrSec>
+<invstOrSec><name>BlackRock Cash Funds</name><cusip>066922477</cusip><pctVal>0.4</pctVal><assetCat>STIV</assetCat></invstOrSec>`;
+    const r = parseNport(xml);
+    expect(r.seriesName).toBe('iShares Select Dividend ETF');
+    expect(r.asOf).toBe('2026-07-31');
+    expect(r.holdings).toEqual([{ ticker: 'MO', name: 'Altria Group Inc', weight: 0.0231, cusip: '02209S103' }]);
+  });
+});

@@ -11,11 +11,13 @@ export interface EtfFund {
   /** iShares product id and page slug, from the fund's URL. */
   productId: string;
   slug: string;
+  /** The fund's name as filed with the SEC (its N-PORT series name). */
+  secName: string;
 }
 
 export const ETF_FUNDS: EtfFund[] = [
-  { symbol: 'DVY', name: 'DVY · iShares Select Dividend', productId: '239500', slug: 'ishares-select-dividend-etf' },
-  { symbol: 'IUSG', name: 'IUSG · iShares Core S&P US Growth', productId: '239725', slug: 'ishares-core-sp-us-growth-etf' },
+  { symbol: 'DVY', name: 'DVY · iShares Select Dividend', productId: '239500', slug: 'ishares-select-dividend-etf', secName: 'iShares Select Dividend ETF' },
+  { symbol: 'IUSG', name: 'IUSG · iShares Core S&P US Growth', productId: '239725', slug: 'ishares-core-sp-us-growth-etf', secName: 'iShares Core S&P U.S. Growth ETF' },
 ];
 
 /** Sleeve key for an ETF, e.g. etf-dvy. */
