@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { unstable_cache } from 'next/cache';
+
 import {
   getAnnualRatios,
   getDividends,
@@ -98,6 +100,13 @@ export async function pooled<T, R>(
  * ticker costs six calls; industry multiples, the risk-free rate and exchange
  * rates are fetched once per run and shared.
  */
+/** Thrown inside the row cache when the run is out of time, so nothing is cached. */
+class StillLoading extends Error {}
+
+/** A deploy can change the model, so cached rows are keyed to the code that made them. */
+const ROW_VERSION = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? 'dev';
+export const ROW_TTL_SECONDS = 60 * 60;
+
 export async function runScreen(
   symbols: string[],
   options: {
@@ -143,14 +152,23 @@ export async function runScreen(
       anchorsDisagree: false,
     };
 
-    // A cold run is paced to FMP's rate limit. Past four minutes, stop starting
-    // new tickers and say so: everything fetched so far is cached, so a reload
-    // finishes the rest in seconds instead of the page timing out.
-    if (Date.now() > deadline) {
-      return { ...base, note: 'Still loading. Reload in a minute to finish.' };
-    }
+    // A finished row is cached for an hour and served stale while it
+    // refreshes, so a visit reads one entry per ticker instead of rerunning
+    // the model on a dozen cached responses. Rows cut short by the deadline
+    // or by an error throw instead, so they are never cached.
+    const cached = unstable_cache(
+      async (): Promise<ScreenRow> => {
+        // A cold run is paced to FMP's rate limit. Past four minutes, stop
+        // starting new tickers and say so: everything fetched so far is
+        // cached, so a reload finishes the rest in seconds.
+        if (Date.now() > deadline) throw new StillLoading();
+        return computeRow();
+      },
+      ['screen-row', ROW_VERSION, symbol, String(horizonYears), String(hurdle), options.correlation === false ? 'nocorr' : 'corr'],
+      { revalidate: ROW_TTL_SECONDS },
+    );
 
-    try {
+    async function computeRow(): Promise<ScreenRow> {
       const [profile, estimates, annual, dividends, earnings, metrics] = await Promise.all([
         getProfile(symbol),
         getEstimates(symbol, 'annual', 10),
@@ -243,7 +261,12 @@ export async function runScreen(
         stretch: required && house.exitPe ? required / house.exitPe - 1 : null,
         clearsHurdle: cagr !== null ? cagr >= hurdle : null,
       };
+    }
+
+    try {
+      return await cached();
     } catch (error) {
+      if (error instanceof StillLoading) return { ...base, note: 'Still loading. Reload in a minute to finish.' };
       return {
         ...base,
         note: error instanceof Error ? error.message.slice(0, 80) : 'Failed to load',

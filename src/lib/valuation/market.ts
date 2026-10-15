@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { unstable_cache } from 'next/cache';
 import { getPriceHistory } from '../fmp/endpoints';
 import { marketLink, portfolioLink, type MarketLink } from './correlation';
 
@@ -18,14 +19,25 @@ function historyStart(): string {
   return new Date(Date.UTC(now.getUTCFullYear() - 3, now.getUTCMonth() - 1, 1)).toISOString().slice(0, 10);
 }
 
-/** A sleeve as one portfolio (weighted when weights are given, else equal), over three years. */
-export async function sleeveMarketLink(symbols: string[], weights?: number[]) {
+async function computeSleeveLink(symbols: string[], weights?: number[]) {
   const from = historyStart();
   const [market, ...stocks] = await Promise.all([
     getPriceHistory(MARKET_PROXY, from),
     ...symbols.map((s) => getPriceHistory(s, from).catch(() => [])),
   ]);
   return portfolioLink(stocks, market, 156, weights);
+}
+
+/**
+ * A sleeve as one portfolio (weighted when weights are given, else equal),
+ * over three years. Weekly returns move slowly, so the result is kept six
+ * hours rather than rebuilt from every holding's prices on each visit.
+ */
+export async function sleeveMarketLink(symbols: string[], weights?: number[]) {
+  const key = symbols.map((s, i) => `${s}:${weights ? weights[i].toFixed(6) : '1'}`).join(',');
+  return unstable_cache(() => computeSleeveLink(symbols, weights), ['sleeve-link', historyStart(), key], {
+    revalidate: 60 * 60 * 6,
+  })();
 }
 
 /**
