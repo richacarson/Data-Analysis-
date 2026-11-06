@@ -67,14 +67,27 @@ interface Member extends BasketHolding {
   trailingEps: number | null;
 }
 
+/** What the P/E phase hands the expected-return phase: symbol and index weight. */
+export interface Sp500MemberWeight {
+  symbol: string;
+  weight: number;
+}
+
+/** The P/E snapshot plus the member list the expected-return phase needs. */
+export interface Sp500PeBuild {
+  snapshot: MarketSnapshot;
+  members: Sp500MemberWeight[];
+}
+
 /**
- * Builds today's snapshot: about 1,500 requests for the P/Es (consensus, TTM
- * ratios and ten years of statements per member) and several thousand more for
- * the expected return. Stops at the deadline and returns null rather than
- * record an index missing part of its members; what was fetched is cached, so
- * the next pass picks up where this one stopped.
+ * Phase 1 — the P/E snapshot: about 1,500 requests for the P/Es (consensus,
+ * TTM ratios and ten years of statements per member). Fits in a single
+ * four-minute pass, so the cron records it as soon as it exists; the page
+ * must not wait on the expected-return phase below. Stops at the deadline and
+ * returns null rather than record an index missing part of its members; what
+ * was fetched is cached, so the next pass picks up where this one stopped.
  */
-export async function buildSp500Snapshot(deadline: number, today = new Date()): Promise<MarketSnapshot | null> {
+export async function buildSp500PeSnapshot(deadline: number, today = new Date()): Promise<Sp500PeBuild | null> {
   const listed = await getSp500Constituents();
   if (listed.length < 400) throw new Error(`S&P 500 list came back with ${listed.length} members`);
 
@@ -123,14 +136,6 @@ export async function buildSp500Snapshot(deadline: number, today = new Date()): 
 
   const priced = members.filter((m): m is Member => m !== null);
 
-  // The house expected return for every member, the model the stock pages use.
-  const screened = await runScreen(
-    priced.map((m) => m.symbol),
-    { deadline, correlation: false, hurdle: DEFAULT_HURDLE },
-  );
-  if (screened.some((r) => r.note?.startsWith('Still loading'))) return null;
-  const cagrOf = new Map(screened.map((r) => [r.symbol, r.review ? null : r.expectedCagr]));
-
   const total = priced.reduce((t, m) => t + m.weight, 0);
   const summary = (group: Member[]): BasketSummary => ({
     names: group.length,
@@ -150,24 +155,60 @@ export async function buildSp500Snapshot(deadline: number, today = new Date()): 
   const ntmYield = current?.pe && next?.pe ? left / current.pe + (1 - left) / next.pe : null;
 
   return {
-    index: 'sp500',
-    ntmPe: ntmYield ? 1 / ntmYield : null,
-    asOf: today.toISOString().slice(0, 10),
-    members: listed.length,
-    used: priced.filter((m) => m.eps.size > 0).length,
-    years: all.slice(1),
-    top: { ...summary(top), symbols: top.map((m) => m.symbol) },
-    rest: summary(ranked.slice(SP500_TOP)),
-    sectors: sectorNames
-      .map((sector) => ({ sector, ...summary(priced.filter((m) => m.sector === sector)) }))
-      .sort((a, b) => b.share - a.share),
-    trailing,
-    expected: {
-      ...returnSummary(
-        priced.map((m) => ({ weight: m.weight, cagr: cagrOf.get(m.symbol) ?? null })),
-        DEFAULT_HURDLE,
-      ),
-      hurdle: DEFAULT_HURDLE,
+    snapshot: {
+      index: 'sp500',
+      ntmPe: ntmYield ? 1 / ntmYield : null,
+      asOf: today.toISOString().slice(0, 10),
+      members: listed.length,
+      used: priced.filter((m) => m.eps.size > 0).length,
+      years: all.slice(1),
+      top: { ...summary(top), symbols: top.map((m) => m.symbol) },
+      rest: summary(ranked.slice(SP500_TOP)),
+      sectors: sectorNames
+        .map((sector) => ({ sector, ...summary(priced.filter((m) => m.sector === sector)) }))
+        .sort((a, b) => b.share - a.share),
+      trailing,
     },
+    members: priced.map((m) => ({ symbol: m.symbol, weight: m.weight })),
   };
+}
+
+/**
+ * Phase 2 — the house expected return for every member, the model the stock
+ * pages use. Several thousand requests, so it runs across chained passes:
+ * finished rows are cached for an hour, and a pass that runs out of time
+ * returns null so the cron chains the next one. A row held for review scores
+ * no return, the same as the stock page.
+ */
+export async function buildSp500Expected(
+  members: Sp500MemberWeight[],
+  deadline: number,
+): Promise<(ReturnSummary & { hurdle: number }) | null> {
+  const screened = await runScreen(
+    members.map((m) => m.symbol),
+    { deadline, correlation: false, hurdle: DEFAULT_HURDLE },
+  );
+  if (screened.some((r) => r.note?.startsWith('Still loading'))) return null;
+  const cagrOf = new Map(screened.map((r) => [r.symbol, r.review ? null : r.expectedCagr]));
+  return {
+    ...returnSummary(
+      members.map((m) => ({ weight: m.weight, cagr: cagrOf.get(m.symbol) ?? null })),
+      DEFAULT_HURDLE,
+    ),
+    hurdle: DEFAULT_HURDLE,
+  };
+}
+
+/**
+ * Builds today's full snapshot in one call: the P/E phase, then the expected
+ * return. Returns null if either phase runs out of time; prefer the two
+ * phases separately in the cron so a finished P/E snapshot is recorded even
+ * when the expected return needs another pass.
+ */
+export async function buildSp500Snapshot(deadline: number, today = new Date()): Promise<MarketSnapshot | null> {
+  const pe = await buildSp500PeSnapshot(deadline, today);
+  if (!pe) return null;
+  const expected = await buildSp500Expected(pe.members, deadline);
+  if (!expected) return null;
+  return { ...pe.snapshot, expected };
 }
