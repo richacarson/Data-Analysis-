@@ -5,20 +5,29 @@ import { recordMarketSnapshot } from '@/lib/market/store';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-const MAX_PASSES = 8;
-// One invocation's budget; the remaining minute covers the response and the
-// chained fetch below.
-const PASS_BUDGET_MS = 240_000;
+const MAX_PASSES = 100;
+// One invocation's budget. The Hobby plan kills a function after ~10s, so a
+// pass must finish and return (chaining the next one via after()) well
+// inside that — a pass that is killed by the platform timeout never chains,
+// and no snapshot is ever recorded. 4s of work leaves room for the cold
+// start, the response, and the in-flight fetches to land. The pool is kept
+// small on purpose: each chained invocation starts a fresh instance with a
+// burst of 40 FMP tokens, and a pass that spends more than the burst waits
+// on the 8-a-second refill — in-flight fetches then overrun the budget and
+// the platform kills the function before it can return and chain.
+const PASS_BUDGET_MS = 4_000;
 
 /**
  * Records the day's S&P 500 snapshot after the close, in two phases.
  *
- * Phase 1, the P/E snapshot, fits in a single pass and is recorded as soon
- * as it exists — the Market page must not wait on phase 2. Phase 2, the
- * house expected return, runs the full model on every member (several
- * thousand requests, more than one invocation's time allows): finished rows
- * are cached, and the next pass (chained, up to eight) finishes from there.
- * A pass that runs out of time in either phase chains the next one.
+ * Phase 1, the P/E snapshot, is built across chained passes (each pass
+ * fetches what it can inside its short budget; fetched members are cached)
+ * and recorded as soon as a pass finishes it — the Market page must not wait
+ * on phase 2. Phase 2, the house expected return, runs the full model on
+ * every member (several thousand requests, more than one invocation's time
+ * allows): finished rows are cached, and the next pass (chained, up to a
+ * hundred) finishes from there. A pass that runs out of time in either phase
+ * chains the next one.
  */
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
