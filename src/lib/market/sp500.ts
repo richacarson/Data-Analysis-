@@ -81,11 +81,13 @@ export interface Sp500PeBuild {
 
 /**
  * Phase 1 — the P/E snapshot: about 1,500 requests for the P/Es (consensus,
- * TTM ratios and ten years of statements per member). Fits in a single
- * four-minute pass, so the cron records it as soon as it exists; the page
- * must not wait on the expected-return phase below. Stops at the deadline and
- * returns null rather than record an index missing part of its members; what
- * was fetched is cached, so the next pass picks up where this one stopped.
+ * TTM ratios and ten years of statements per member). FMP's per-minute
+ * allowance (a burst of 40, then 8 a second) means one invocation can only
+ * fetch ~90 members before its short budget runs out, so the snapshot is
+ * built across chained passes: what was fetched is cached, the next pass
+ * picks up where this one stopped, and the snapshot is recorded the moment
+ * a pass finishes it. Stops at the deadline and returns null rather than
+ * record an index missing part of its members.
  */
 export async function buildSp500PeSnapshot(deadline: number, today = new Date()): Promise<Sp500PeBuild | null> {
   const listed = await getSp500Constituents();
@@ -109,7 +111,7 @@ export async function buildSp500PeSnapshot(deadline: number, today = new Date())
   // The year before the first shown, so the first year has a growth rate.
   const years = [String(Number(shown[0]) - 1), ...shown];
   let late = false;
-  const members = await pooled([...byCompany.values()], 8, async (m): Promise<Member | null> => {
+  const members = await pooled([...byCompany.values()], 12, async (m): Promise<Member | null> => {
     if (Date.now() > deadline) {
       late = true;
       return null;
